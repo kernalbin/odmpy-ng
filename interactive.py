@@ -1,4 +1,4 @@
-import json, subprocess, os, string, shutil
+import json, os, string, shutil
 import ffmetadata
 from scraper import Scraper
 import overdrive_download
@@ -8,7 +8,7 @@ print("Starting ODMPY-NG")
 
 cookies = []
 
-with open("config") as f:
+with open("config") as f: # {"library": "", "user": "", "pass": "", "download-dir": ""}
     config = json.load(f)
 if os.path.exists("cookies"):
     with open("cookies") as f:
