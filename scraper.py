@@ -2,7 +2,9 @@ from seleniumwire import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException
+from webdriver_manager.chrome import ChromeDriverManager
 import time
 
 class Scraper:
@@ -10,12 +12,22 @@ class Scraper:
     def __init__(self, config, headless=True):
         self.config = config
 
-        self.base_url = "https://" + config["library"] + ".overdrive.com"
+        # Fix URL construction - use the full library URL provided in config
+        self.base_url = config["library"]
+        if not self.base_url.startswith("https://"):
+            self.base_url = "https://" + self.base_url
 
         self.chrome_options = Options()
         if headless:
             self.chrome_options.add_argument("--headless=new")
         self.chrome_options.add_argument("--log-level=2")
+        self.chrome_options.add_argument("--no-sandbox")
+        self.chrome_options.add_argument("--disable-dev-shm-usage")
+        self.chrome_options.add_argument("--disable-gpu")
+        self.chrome_options.add_argument("--disable-extensions")
+        self.chrome_options.add_argument("--window-size=1920,1080")
+        self.chrome_options.add_argument("--start-maximized")
+        self.chrome_options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
         self.driver = None
 
@@ -47,7 +59,9 @@ class Scraper:
 
         # Create webdriver session and add given cookies if they exist.
         if not self.driver:
-            self.driver = webdriver.Chrome(options=self.chrome_options)
+            # Use webdriver-manager to handle Chrome driver installation and initialization
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=self.chrome_options)
             self.driver.get(self.base_url)
             try:
                 for cookie in cookies:

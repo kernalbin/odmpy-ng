@@ -1,0 +1,11 @@
+{
+    "download-dir": "/path/to/your/audiobooks",
+    "libraries": [
+        {
+            "name": "Example Library",
+            "url": "https://yourlibrary.overdrive.com",
+            "card_number": "YOUR_CARD_NUMBER",
+            "pin": "YOUR_PIN"
+        }
+    ]
+}
