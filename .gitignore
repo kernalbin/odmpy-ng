@@ -5,3 +5,7 @@ __pycache__/
 *.pyc
 .DS_Store
 venv/
+Scripts/
+Lib/
+Inclue/
+downloads/

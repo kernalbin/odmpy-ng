@@ -22,3 +22,10 @@ Converts the chapter information, along with Title/Author to a metadata file to 
 ## file_conversions.py
 Converts the mp3s and other info into a m4b file with half decent metadata.
 AAC Encodes can take a while, but afaik are required to use .m4b container? Which I heavily prefer.
+
+## to-do
+To minimize chance of identification as "bot" behavior. See http requests/responses with DevTools, there is an analytics ping request made after listening to each part
+
+Fully command line compatible / non-interactive
+
+Download multiple books in one command
