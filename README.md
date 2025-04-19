@@ -29,3 +29,5 @@ To minimize chance of identification as "bot" behavior. See http requests/respon
 Fully command line compatible / non-interactive
 
 Download multiple books in one command
+
+Long chapters can cause missing mp3 parts.
