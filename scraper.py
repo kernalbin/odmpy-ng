@@ -42,6 +42,12 @@ class Scraper:
         print("Logging in...")
         self.driver.get(self.base_url + "/account/ozone/sign-in")
 
+        try:
+            cookies_dialog = self.driver.find_element(By.CLASS_NAME, 'cookie-banner-close-button')
+            cookies_dialog.click()
+        except:
+            pass
+
         signin_button = self.driver.find_element(By.CLASS_NAME, 'signin-button')
         username_input = self.driver.find_element(By.ID, 'username')
         password_input = self.driver.find_element(By.ID, 'password')
