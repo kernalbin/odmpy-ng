@@ -53,7 +53,7 @@ if "libraries" in config and len(config["libraries"]) > 0:
         "library": selected_library["url"],
         "user": selected_library["card_number"],
         "pass": selected_library["pin"],
-        "download-dir": config["download-dir"]
+        "download-dir": '/downloads'
     }
     
     print(f"Using library: {selected_library['name']}")
