@@ -1,5 +1,4 @@
 {
-    "download-dir": "/path/to/your/audiobooks",
     "libraries": [
         {
             "name": "Example Library",
