@@ -41,7 +41,7 @@ except FileNotFoundError:
     sys.exit(1)
 except json.JSONDecodeError:
     print(f"Error: Config file '{config_file}' is not valid JSON")
-    sys.exit(1)
+    sys.exit(1)    
 
 if os.path.exists("cookies"):
     try:
@@ -79,6 +79,12 @@ if "libraries" in config and len(config["libraries"]) > 0:
     }
     
     print(f"Using library: {selected_library['name']}")
+else:
+    print("No libraries found, did you create a valid config file?")
+    sys.exit(1)
+
+if config.get("low_quality_encode", False):
+    print("WARNING: Low quality mode set, 32k audio encodes.")
 
 if cookies:
     print("Cookies loaded:")
@@ -86,12 +92,15 @@ if cookies:
 
 scraper = Scraper(scraper_config)
 
+# Login to the chosen library, and save the cookies to a file.
 cookies = scraper.ensureLogin(cookies)
 with open("cookies", "w") as f:
     json.dump(cookies, f, indent=4)
 
+# Collect list of loans
 books = scraper.getLoans() # [(index, title.text, authors[index].text, title_link)]
 
+# Print loans for selection by user
 for index, title, author, access_url in books:
     print(f"{index}: {title} - {author}")
 
@@ -100,6 +109,7 @@ selections_input = input("1-2 or 1,2 or 1: ")
 
 title_selections = parse_input(selections_input)
 
+# For each selected book, get the data
 for title_index in title_selections:
 
     book_data = scraper.getBook(books, title_index) # (urls, chapter_markers, cover_image_url, expected_time)
@@ -141,7 +151,8 @@ for title_index in title_selections:
         if file_conversions.concatMP3(tmp_dir, tmp_dir, "temp.mp3"):
             print("Converted to single MP3")
 
-        if file_conversions.encodeAAC(tmp_dir, "temp.mp3", "temp.m4b"):
+        low_quality_encode = config.get("low_quality_encode", 0)
+        if file_conversions.encodeAAC(tmp_dir, "temp.mp3", "temp.m4b", lq=low_quality_encode):
             print("Converted to AAC M4B")
 
         print("Generating metadata")

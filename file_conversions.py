@@ -28,7 +28,12 @@ def concatMP3(tmp_dir, download_path, out_file):
         print(f"Error concatenating MP3 files: {e}")
         return False
     
-def encodeAAC(tmp_dir, in_file, out_file):
+def encodeAAC(tmp_dir, in_file, out_file, lq=0):
+    # Check if lq is True and set the bitrate accordingly
+    if lq==1:
+        bitrate = '32k'
+    else:
+        bitrate = '64k'  # Default to 64k for better quality
     in_file = os.path.join(tmp_dir, in_file)
     out_file = os.path.join(tmp_dir, out_file)
 
@@ -39,7 +44,7 @@ def encodeAAC(tmp_dir, in_file, out_file):
             '-y', 
             '-i', in_file, 
             '-c:a', 'aac', 
-            '-b:a', '64k',  # Increased from 32k to 64k for better quality
+            '-b:a', bitrate,  # Set bitrate based on lq
             '-ar', '44100', # Maintain 44.1kHz sample rate
             '-ac', '2',     # Ensure stereo output (2 channels)
             '-profile:a', 'aac_low', # Use AAC-LC profile for compatibility

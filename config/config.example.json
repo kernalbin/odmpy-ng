@@ -6,5 +6,6 @@
             "card_number": "YOUR_CARD_NUMBER",
             "pin": "YOUR_PIN"
         }
-    ]
+    ],
+    "low_quality_encode": 0
 }

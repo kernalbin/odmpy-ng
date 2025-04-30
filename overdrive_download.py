@@ -18,7 +18,6 @@ def downloadMP3(book_urls, download_path, cookies):
             with open(os.path.join(download_path, f"part{part_id}.mp3"), "wb") as f:
                 for chunk in response.iter_content(1024):
                     f.write(chunk)
-            print("Downloaded part")
         else:
             print(f"Download failed: {response.status_code}")
             return False
