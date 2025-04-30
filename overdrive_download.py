@@ -1,4 +1,4 @@
-import requests, json, subprocess, collections, os, string
+import requests, collections, os, json
 
 headers = {'User-Agent': 'Mozilla/5.0'}
 
@@ -11,7 +11,7 @@ def downloadMP3(book_urls, download_path, cookies):
     cookie_dict = {cookie['name']: cookie['value'] for cookie in cookies}
 
     for part_id, audio_file in ordered_urls.items():
-        print("Downloading part " + part_id)
+        print("Downloading part " + str(int(part_id)))
         response = requests.get(audio_file, headers=headers, cookies=cookie_dict, stream=True)
 
         if response.status_code == 200:
@@ -35,4 +35,17 @@ def downloadCover(cover_url, download_path, cookies):
             for chunk in response.iter_content(1024):
                 f.write(chunk)
         return True
+    return False
+
+def downloadThunderMetadata(book_id: int, download_path):
+    api_url = f"https://thunder.api.overdrive.com/v2/media/{book_id}"
+
+    response = requests.get(api_url)
+
+    if response.status_code == 200:
+        book_metadata = response.json()
+        with open(download_path, 'w') as f:
+            json.dump(book_metadata, f, ensure_ascii=False, indent=4)
+        return True
+    print(f"Failed to download metadata with status code {response.status_code}")
     return False

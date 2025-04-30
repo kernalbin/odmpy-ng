@@ -7,5 +7,6 @@
             "pin": "YOUR_PIN"
         }
     ],
-    "low_quality_encode": 0
+    "low_quality_encode": 0,
+    "download_thunder_metadata": 0
 }

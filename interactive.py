@@ -120,9 +120,9 @@ title_selections = parse_input(selections_input, books)
 for title_index in title_selections:
     book_selection = get_book_by_index(title_index, books)
 
-    book_data = scraper.getBook(book_selection["link"]) # (urls, chapter_markers, cover_image_url, expected_time)
-
     print(f"Accessing {book_selection["title"]}, ID: {book_selection["id"]}")
+
+    book_data = scraper.getBook(book_selection["link"]) # (urls, chapter_markers, cover_image_url, expected_time)
 
     if book_data:
         print(f"Found {len(book_data[0])} parts")
@@ -154,6 +154,11 @@ for title_index in title_selections:
         
         if overdrive_download.downloadCover(book_cover_image_url, cover_path, cookies):
             print("Downloaded Cover")
+
+        if config.get("download_thunder_metadata", 0):
+            metadata_path = os.path.abspath(os.path.join(download_path, 'metadata.json'))
+            if overdrive_download.downloadThunderMetadata(book_selection["id"], metadata_path):
+                print("Downloaded additional metadata")
 
         if overdrive_download.downloadMP3(book_urls, tmp_dir, cookies):
             print("Downloaded Audio")
