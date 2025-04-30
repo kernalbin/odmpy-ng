@@ -20,11 +20,11 @@ docker run -it --rm -v ./config:/config -v ./downloads:/downloads odmpy-ng
 In either case you need to fill out a config file. 
 
 ## interactive.py
-This is an example interfaace file to use this garbage.
+This is the the main script that coordinates the display and collection of audiobooks.
 
 ## scraper.py
 This is what scrapes book data from overdrive, including audio urls, cover and chapter info.
-Its mostly reliable, but quite slow, especially in books with many chapters.
+Its semi reliable, but quite slow, especially in books with many chapters.
 
 ## overdrive_download.py
 This uses the scraper info and cookies to download the audiobook in its parts.
@@ -45,3 +45,6 @@ Fully command line compatible / non-interactive
 Download multiple books in one command
 
 Long chapters can cause missing mp3 parts.
+
+## Disclaimer
+To use odmpy-ng, you must have a valid library account. Use at your own risk.
