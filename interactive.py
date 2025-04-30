@@ -4,9 +4,11 @@ from scraper import Scraper
 import overdrive_download
 import file_conversions
 
-def parse_input(input_str: str) -> set:
+def parse_input(input_str: str, books: list) -> set:
     partsSet = set()
     parts = input_str.split(',')
+
+    valid_indexes = {book["index"] for book in books}
 
     for part in parts:
         part = part.strip()
@@ -21,7 +23,12 @@ def parse_input(input_str: str) -> set:
                 partsSet.add(int(part))
             except ValueError:
                 raise ValueError(f"Invalid integer input: {part}")
-    return sorted(partsSet)
+            
+    filtered_indexes = sorted(partsSet.intersection(valid_indexes))
+    return filtered_indexes
+
+def get_book_by_index(index: int, books: list) -> str | None:
+    return next((b for b in books if b["index"] == index), None)
 
 print("Starting ODMPY-NG")
 
@@ -98,28 +105,31 @@ with open("cookies", "w") as f:
     json.dump(cookies, f, indent=4)
 
 # Collect list of loans
-books = scraper.getLoans() # [(index, title.text, authors[index].text, title_link)]
+books = scraper.getLoans() # [{"index": 0, "title": "", "author": "", "link": "", "id": 0}]
 
 # Print loans for selection by user
-for index, title, author, access_url in books:
-    print(f"{index}: {title} - {author}")
+for book in books:
+    print(f"{book["index"]}: {book["title"]} - {book["author"]}")
 
 print("Select a title to download")
-selections_input = input("1-2 or 1,2 or 1: ")
+selections_input = input("0,1,2-6 : ")
 
-title_selections = parse_input(selections_input)
+title_selections = parse_input(selections_input, books)
 
 # For each selected book, get the data
 for title_index in title_selections:
+    book_selection = get_book_by_index(title_index, books)
 
-    book_data = scraper.getBook(books, title_index) # (urls, chapter_markers, cover_image_url, expected_time)
+    book_data = scraper.getBook(book_selection["link"]) # (urls, chapter_markers, cover_image_url, expected_time)
+
+    print(f"Accessing {book_selection["title"]}, ID: {book_selection["id"]}")
 
     if book_data:
         print(f"Found {len(book_data[0])} parts")
         input("Enter to download")
 
-        book_title = books[title_index][1]
-        book_author = books[title_index][2]
+        book_title = book_selection["title"]
+        book_author = book_selection["author"]
         book_urls = book_data[0]
         book_chapter_markers = book_data[1]
         book_cover_image_url = book_data[2]

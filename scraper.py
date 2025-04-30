@@ -96,25 +96,25 @@ class Scraper:
         print("Finding books...")
         self.driver.get(self.base_url + "/account/loans")
 
-        loans = self.driver.find_elements(By.CLASS_NAME, 'Loans-TitleContainerRight')
-        titles = self.driver.find_elements(By.CLASS_NAME, 'title-name')
-        authors = self.driver.find_elements(By.CLASS_NAME, 'secondary-underline')
-
         books = []
-        for index, title in enumerate(titles):
-            title_link = loans[index].find_element(By.PARTIAL_LINK_TEXT, "Listen now").get_attribute('href')
-            books.append((index, title.text, authors[index].text, title_link))
+        loan_blocks = self.driver.find_elements(By.CLASS_NAME, 'Loans-TitleContainerRight')
+
+        for index,block in enumerate(loan_blocks):
+            try:
+                title_element = block.find_element(By.CLASS_NAME, 'title-name')
+                author_element = block.find_element(By.CLASS_NAME, 'secondary-underline')
+                listen_link = block.find_element(By.PARTIAL_LINK_TEXT, 'Listen now').get_attribute('href')
+
+                book_id = listen_link.split('/')[-1]
+
+                books.append({"index": index, "title": title_element.text.strip(), "author": author_element.text.strip(), "link": listen_link, "id": book_id})
+            except Exception as e:
+                print(f"Failed to parse loan at index {index}: {e}")
+
+        print(books)
         return books
 
-    def getBook(self, books, book_index):
-        # Check for valid book index
-        if book_index > len(books):
-            return False
-        
-        download_title = books[book_index][1]       # Book title
-        selected_title_link = books[book_index][3]  # Book access link @ listen.onedrive.com
-
-        print("Accessing '" + download_title + "'")
+    def getBook(self, selected_title_link):
 
         self.driver.get(selected_title_link)
 
