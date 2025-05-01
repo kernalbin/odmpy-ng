@@ -8,5 +8,6 @@
         }
     ],
     "low_quality_encode": 0,
-    "download_thunder_metadata": 0
+    "download_thunder_metadata": 0,
+    "encoder_count": 4
 }

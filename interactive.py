@@ -4,6 +4,8 @@ from scraper import Scraper
 import overdrive_download
 import file_conversions
 
+# Convert user entered string into a list of valid book indexes
+# Allows for comma separated items and dash separated ranges
 def parse_input(input_str: str, books: list) -> set:
     partsSet = set()
     parts = input_str.split(',')
@@ -27,6 +29,7 @@ def parse_input(input_str: str, books: list) -> set:
     filtered_indexes = sorted(partsSet.intersection(valid_indexes))
     return filtered_indexes
 
+# Get book dictionary item with index value from the books list
 def get_book_by_index(index: int, books: list) -> str | None:
     return next((b for b in books if b["index"] == index), None)
 
@@ -39,6 +42,7 @@ if len(sys.argv) < 2:
     print("Usage: python interactive.py <config_file_path>")
     sys.exit(1)
 
+# Load config file specified in argument
 config_file = sys.argv[1]
 try:
     with open(config_file) as f:
@@ -50,6 +54,7 @@ except json.JSONDecodeError:
     print(f"Error: Config file '{config_file}' is not valid JSON")
     sys.exit(1)    
 
+# Try to find and import cookies from previous session - probably broken in docker unless you mount the tmp folder
 if os.path.exists("cookies"):
     try:
         with open("cookies") as f:
@@ -60,6 +65,10 @@ if os.path.exists("cookies"):
 
 print("Config loaded")
 
+# Warn about low quality encoding (used for testing to speed up wait)
+if config.get("low_quality_encode", 0):
+    print("WARNING: Low quality mode set, 32k audio encodes.")
+
 # Handle multiple libraries
 if "libraries" in config and len(config["libraries"]) > 0:
     print("\nAvailable libraries:")
@@ -67,6 +76,7 @@ if "libraries" in config and len(config["libraries"]) > 0:
         print(f"{i}: {library['name']} - {library['url']}")
 
     if len(config["libraries"]) == 1:
+        # Only one library, automatically select it
         library_index = 0
     else:
         # Let user select which library to use
@@ -90,9 +100,7 @@ else:
     print("No libraries found, did you create a valid config file?")
     sys.exit(1)
 
-if config.get("low_quality_encode", False):
-    print("WARNING: Low quality mode set, 32k audio encodes.")
-
+# Notify of cookies file loaded from previous session
 if cookies:
     print("Cookies loaded:")
     print(cookies)
@@ -140,8 +148,10 @@ for title_index in title_selections:
         if not os.path.exists(tmp_dir):
             os.makedirs(tmp_dir, mode=0o755)
 
+        # Save current cookies for upcoming downloads
         cookies = scraper.getCookies()
 
+        # Filter to remove punctuation from book title/author for file path
         filter_table = str.maketrans(dict.fromkeys(string.punctuation))
         download_path = os.path.abspath(os.path.join(scraper_config["download-dir"], 
                                             book_author.translate(filter_table), 
@@ -163,12 +173,11 @@ for title_index in title_selections:
         if overdrive_download.downloadMP3(book_urls, tmp_dir, cookies):
             print("Downloaded Audio")
 
-        if file_conversions.concatMP3(tmp_dir, tmp_dir, "temp.mp3"):
-            print("Converted to single MP3")
+        if file_conversions.encodeAACMultiprocessing(tmp_dir, tmp_dir, config.get("low_quality_encode", 0), config.get("encoder_count", 4)):
+            print("Converted all files to AAC M4B")
 
-        low_quality_encode = config.get("low_quality_encode", 0)
-        if file_conversions.encodeAAC(tmp_dir, "temp.mp3", "temp.m4b", lq=low_quality_encode):
-            print("Converted to AAC M4B")
+        if file_conversions.concatM4B(tmp_dir, tmp_dir, 'temp.m4b'):
+            print("Converted to single M4B")
 
         print("Generating metadata")
         ffmetadata.writeMetaFile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
