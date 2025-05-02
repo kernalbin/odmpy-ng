@@ -10,7 +10,7 @@ There is also a Dockerfile, which may be easier, git clone then build and run it
 git clone https://github.com/kernalbin/odmpy-ng.git
 cd odmpy-ng
 docker build -t odmpy-ng .
-docker run -it --rm -v ./config:/config -v ./downloads:/downloads odmpy-ng
+docker run -it --rm -v ./config:/config -v ./downloads:/downloads -e HOST_UID=$(id -u) -e HOST_GID=$(id -g) odmpy-ng
 ```
 
 In either case you need to fill out a config file. 
