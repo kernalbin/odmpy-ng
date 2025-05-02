@@ -109,6 +109,11 @@ scraper = Scraper(scraper_config)
 
 # Login to the chosen library, and save the cookies to a file.
 cookies = scraper.ensureLogin(cookies)
+
+if not cookies:
+    print("Sign in failed")
+    sys.exit(1)
+
 with open("cookies", "w") as f:
     json.dump(cookies, f, indent=4)
 

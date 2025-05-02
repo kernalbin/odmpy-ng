@@ -60,6 +60,12 @@ class Scraper:
         password_input.send_keys(self.config['pass'])
 
         signin_button.click()
+
+        time.sleep(1)
+
+        if 'sign-in' in self.driver.current_url.lower():
+            return []
+
         return self.driver.get_cookies()
 
     def ensureLogin(self, cookies: list[dict]) -> list[dict]: # Can pass in []
