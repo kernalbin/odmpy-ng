@@ -40,6 +40,7 @@ AAC Encodes can take a while, but afaik are required to use .m4b container? Whic
 - [ ] Long chapters can cause missing mp3 parts.
 - [ ] Return / Renew loans
 - [ ] Filter loans by media type
+- [ ] Persistent cookies again
 
 ## Disclaimer
 To use odmpy-ng, you must have a valid library account. Use at your own risk.
