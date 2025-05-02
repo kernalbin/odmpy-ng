@@ -1,6 +1,7 @@
 from seleniumwire import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException
@@ -95,6 +96,14 @@ class Scraper:
 
         print("Finding books...")
         self.driver.get(self.base_url + "/account/loans")
+
+        try:
+            WebDriverWait(self.driver, 15).until(
+                EC.presence_of_element_located((By.CLASS_NAME, 'Loans-TitleContainerRight'))
+            )
+        except Exception as e:
+            print(f"Failed to get loans, not loading correctly: {e}")
+            return []
 
         books = []
         loan_blocks = self.driver.find_elements(By.CLASS_NAME, 'Loans-TitleContainerRight')
