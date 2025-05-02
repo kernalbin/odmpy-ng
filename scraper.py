@@ -126,7 +126,6 @@ class Scraper:
             except Exception as e:
                 print(f"Failed to parse loan at index {index}: {e}")
 
-        print(books)
         return books
 
     def getBook(self, selected_title_link):
