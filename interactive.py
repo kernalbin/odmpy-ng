@@ -191,6 +191,15 @@ for title_index in title_selections:
             raise InterruptedError
         print("Downloaded Audio")
 
+        duration = convert_metadata.get_total_duration(tmp_dir)
+        expected_duration = convert_metadata.to_seconds(book_expected_length)
+        if duration/expected_duration < 0.9:
+            # Did we get WAY too little audio?
+            pct = int(100 * duration/expected_duration)
+            print(f"WARNING: found only {pct}% of expected audio.")
+            if config.get("abort_on_warning", 0):
+                sys.exit(3)
+
         if config.get("skip_reencode", 0):
             # Just copy everything to the dest.
             source, dest = pathlib.Path(tmp_dir), pathlib.Path(download_path)

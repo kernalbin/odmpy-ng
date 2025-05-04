@@ -2,7 +2,7 @@
 import os
 import json, sys, string, itertools
 from typing import List, Set
-from dataclasses import dataclass
+from mutagen.mp3 import MP3
 
 # TODO - load canonical data... I shoouldn't have tried to autocorrect using
 # Python's title() function, it's buggy in its original design and no longer
@@ -13,6 +13,19 @@ def normalize_tag(tag: str) -> str:
     if t.isupper():
         t = string.capwords(t)
     return canonical_tags.get(t, t)
+
+def get_mp3_duration(filepath):
+    """Returns the duration of an MP3 file in seconds."""
+    return MP3(filepath).info.length
+
+def get_total_duration(directory):
+    """Calculates the total duration of all MP3 files in a directory."""
+    total_duration = 0
+    for filename in os.listdir(directory):
+        if filename.endswith(".mp3"):
+            filepath = os.path.join(directory, filename)
+            total_duration += get_mp3_duration(filepath)
+    return total_duration
 
 def abs_from_pylibby(container, mark_autoloaded=["Misordered"]):
     # pylibby uses two different formats, not sure why.
