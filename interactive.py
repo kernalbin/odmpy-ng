@@ -171,8 +171,10 @@ for title_index in title_selections:
             print("Downloaded Cover")
 
         if config.get("download_thunder_metadata", 0):
-            metadata_path = os.path.abspath(os.path.join(download_path, 'metadata.json'))
+            metadata_path = os.path.abspath(os.path.join(download_path, 'info.json'))
             if overdrive_download.downloadThunderMetadata(book_selection["id"], metadata_path):
+                with open(os.path.join(download_path,'chapters.json'), 'w') as f:
+                    json.dump(book_chapter_markers, f)
                 print("Downloaded additional metadata")
 
         if overdrive_download.downloadMP3(book_urls, tmp_dir, cookies):
