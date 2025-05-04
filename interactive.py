@@ -1,8 +1,9 @@
-import json, os, string, shutil, sys
+import json, os, string, shutil, sys, pathlib
 import ffmetadata
 from scraper import Scraper
 import overdrive_download
 import file_conversions
+import convert_metadata
 
 # Convert user entered string into a list of valid book indexes
 # Allows for comma separated items and dash separated ranges
@@ -170,34 +171,50 @@ for title_index in title_selections:
         if overdrive_download.downloadCover(book_cover_image_url, cover_path, cookies):
             print("Downloaded Cover")
 
-        if config.get("download_thunder_metadata", 0):
-            metadata_path = os.path.abspath(os.path.join(download_path, 'info.json'))
+        if config.get("download_thunder_metadata", 0) or config.get("convert_audiobookshelf_metadata", 0):
+            # Both of these require thunder metadata.
+            metadata_path = os.path.abspath(os.path.join(tmp_dir, 'info.json'))
+            chapters_path = os.path.abspath(os.path.join(tmp_dir,'chapters.json'))
+            with open(chapters_path, 'w') as f:
+                json.dump(book_chapter_markers, f)
             if overdrive_download.downloadThunderMetadata(book_selection["id"], metadata_path):
-                with open(os.path.join(download_path,'chapters.json'), 'w') as f:
-                    json.dump(book_chapter_markers, f)
-                print("Downloaded additional metadata")
+                print("Downloaded json metadata")
+                if config.get("convert_audiobookshelf_metadata", 0):
+                    convert_metadata.convert_file(metadata_path, book_expected_length)
+                    print("Provided audiobookshelf metadata")
+                    if not config.get("download_thunder_metadata", 0):
+                        os.unlink(metadata_path)
+                        os.unlink(chapters_path)
+                        print("Cleaned up json metadata")
 
-        if overdrive_download.downloadMP3(book_urls, tmp_dir, cookies):
-            print("Downloaded Audio")
+        if not overdrive_download.downloadMP3(book_urls, tmp_dir, cookies):
+            raise InterruptedError
+        print("Downloaded Audio")
 
-        if file_conversions.encodeAACMultiprocessing(tmp_dir, tmp_dir, config.get("low_quality_encode", 0), config.get("encoder_count", 4)):
-            print("Converted all files to AAC M4B")
+        if config.get("skip_reencode", 0):
+            # Just copy everything to the dest.
+            source, dest = pathlib.Path(tmp_dir), pathlib.Path(download_path)
+            for p in source.iterdir():
+                shutil.copy(p, dest)
+        else:
+            if file_conversions.encodeAACMultiprocessing(tmp_dir, tmp_dir, config.get("low_quality_encode", 0), config.get("encoder_count", 4)):
+                print("Converted all files to AAC M4B")
 
-        if file_conversions.concatM4B(tmp_dir, tmp_dir, 'temp.m4b'):
-            print("Converted to single M4B")
+            if file_conversions.concatM4B(tmp_dir, tmp_dir, 'temp.m4b'):
+                print("Converted to single M4B")
 
-        print("Generating metadata")
-        ffmetadata.writeMetaFile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
-        
-        print("Adding metadata to audiobook")
-        output_file = os.path.abspath(os.path.join(download_path, book_title.replace(" ", "")+".m4b"))
-        if file_conversions.encodeMetadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
-            print("Finished file created")
-            # Clean up temporary files
-            try:
-                shutil.rmtree(tmp_dir)
-                print("Temporary files cleaned up")
-            except Exception as e:
-                print(f"Warning: Could not remove temporary directory: {e}")
+            print("Generating metadata")
+            ffmetadata.writeMetaFile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
+            
+            print("Adding metadata to audiobook")
+            output_file = os.path.abspath(os.path.join(download_path, book_title.replace(" ", "")+".m4b"))
+            if file_conversions.encodeMetadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
+                print("Finished file created")
+                # Clean up temporary files
+                try:
+                    shutil.rmtree(tmp_dir)
+                    print("Temporary files cleaned up")
+                except Exception as e:
+                    print(f"Warning: Could not remove temporary directory: {e}")
 
 del scraper
