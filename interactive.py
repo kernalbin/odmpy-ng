@@ -173,8 +173,8 @@ for title_index in title_selections:
 
         if config.get("download_thunder_metadata", 0) or config.get("convert_audiobookshelf_metadata", 0):
             # Both of these require thunder metadata.
-            metadata_path = os.path.abspath(os.path.join(tmp_dir, 'info.json'))
-            chapters_path = os.path.abspath(os.path.join(tmp_dir,'chapters.json'))
+            metadata_path = os.path.abspath(os.path.join(download_path, 'info.json'))
+            chapters_path = os.path.abspath(os.path.join(download_path,'chapters.json'))
             with open(chapters_path, 'w') as f:
                 json.dump(book_chapter_markers, f)
             if overdrive_download.downloadThunderMetadata(book_selection["id"], metadata_path):
