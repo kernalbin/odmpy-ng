@@ -128,7 +128,7 @@ class Scraper:
 
         return books
 
-    def getBook(self, selected_title_link):
+    def getBook(self, selected_title_link, config):
 
         self.driver.get(selected_title_link)
 
@@ -161,22 +161,52 @@ class Scraper:
 
         chapter_markers[chapter_title.get_attribute("textContent")] = timeline_current_time.get_attribute("textContent")
 
+        # Get the chapter names (sometimes gets all of the URLs too)
+        last_marker = None
         while chapter_next.is_enabled():
-            print(timeline_percent.text)
+            if last_marker != timeline_percent.text:
+                print(timeline_percent.text, end=', ', flush=True)
+                last_marker = timeline_percent.text
             chapter_next.click()
-            time.sleep(2)
+            time.sleep(1.5)
             if not chapter_title.get_attribute("textContent") in chapter_markers:
                 chapter_markers[chapter_title.get_attribute("textContent")] = timeline_current_time.get_attribute("textContent")
-            for i in range(2):
-                time_previous.click()
-                time.sleep(.15)
-            for i in range(4):
-                time_next.click()
-                time.sleep(.15)
-            time.sleep(.3)
+        print(".")
 
         urls = {}
+        cover_image_url = self.fill_urls(urls)
+        gaps = get_gaps(urls)
+        if cover_image_url and not gaps:
+            return (urls, chapter_markers, cover_image_url, expected_time)
 
+        print("Missing chapters; digging deeper for: ", gaps)
+        while chapter_previous.is_enabled():
+            chapter_previous.click()
+            time.sleep(.2)
+        time.sleep(1)
+
+        # Get all of the parts.
+        last_marker = None
+        while chapter_next.is_enabled():
+            if last_marker != timeline_percent.text:
+                print(timeline_percent.text, end=', ', flush=True)
+                last_marker = timeline_percent.text
+            for _ in range(10):
+                time_next.click()
+            time.sleep(.05)
+        print(".")
+
+        cover_image_url = self.fill_urls(urls)
+
+        if gaps := get_gaps(urls):
+            print("WARNING: unable to find all parts, missing parts:", sorted(gaps))
+            if config.get("abort_on_warning", 0):
+                sys.exit(3)
+
+        return (urls, chapter_markers, cover_image_url, expected_time)
+
+    def fill_urls(self, urls):
+        cover = None
         for request in self.driver.requests:
             if request.response:
                 if '.mp3' in request.url:
@@ -185,6 +215,11 @@ class Scraper:
                         urls[part_id] = request.url
                 if '.jpg' in request.url:
                     if 'listen.overdrive.com' in request.url:
-                        cover_image_url = request.url
+                        cover = request.url
+        return cover
 
-        return (urls, chapter_markers, cover_image_url, expected_time)
+def get_gaps(strs: dict[str, str]) -> set[int]:
+    actual = set( int(s) for s in strs.keys() )
+    ideal = set( range(1, max(actual)) )
+    return ideal - actual
+

@@ -136,7 +136,7 @@ for title_index in title_selections:
 
     print(f"Accessing {book_selection["title"]}, ID: {book_selection["id"]}")
 
-    book_data = scraper.getBook(book_selection["link"]) # (urls, chapter_markers, cover_image_url, expected_time)
+    book_data = scraper.getBook(book_selection["link"], config) # (urls, chapter_markers, cover_image_url, expected_time)
 
     if book_data:
         print(f"Found {len(book_data[0])} parts")
