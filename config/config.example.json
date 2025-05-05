@@ -9,5 +9,8 @@
     ],
     "low_quality_encode": 0,
     "download_thunder_metadata": 0,
+    "convert_audiobookshelf_metadata": 0,
+    "skip_reencode": 0,
+    "abort_on_warning": 0,
     "encoder_count": 4
 }
