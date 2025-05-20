@@ -1,4 +1,5 @@
 import requests, collections, os, json
+import convert_metadata
 
 headers = {'User-Agent': 'Mozilla/5.0'}
 
@@ -23,6 +24,24 @@ def downloadMP3(book_urls, download_path, cookies):
             return False
         
     return True
+
+def downloadMP3Part(url, part_id, download_path, cookies) -> int: # Downloads mp3 part to download_path/part[ID].mp3 and returns the length in seconds
+    if not os.path.exists(download_path):
+        os.makedirs(download_path)
+
+    cookie_dict = {cookie['name']: cookie['value'] for cookie in cookies}
+
+    print("Downloading part " + str(int(part_id)))
+    response = requests.get(url, headers=headers, cookies=cookie_dict, stream=True)
+
+    if response.status_code == 200:
+        with open(os.path.join(download_path, f"part{part_id}.mp3"), "wb") as f:
+            for chunk in response.iter_content(1024):
+                f.write(chunk)
+        return convert_metadata.get_mp3_duration(os.path.join(download_path, f"part{part_id}.mp3"))
+    else:
+        print(f"Download failed: {response.status_code}")
+        return 0
 
 
 def downloadCover(cover_url, download_path, cookies):

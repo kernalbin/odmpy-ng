@@ -130,29 +130,30 @@ selections_input = input("0,1,2-6 : ")
 
 title_selections = parse_input(selections_input, books)
 
+
+
 # For each selected book, get the data
 for title_index in title_selections:
+    # Create tmp directory with absolute path
+    tmp_dir = os.path.abspath(os.path.join(os.getcwd(), "tmp"))
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir, mode=0o755)
+
+    # Get book selection from index
     book_selection = get_book_by_index(title_index, books)
 
     print(f"Accessing {book_selection["title"]}, ID: {book_selection["id"]}")
 
-    book_data = scraper.getBook(book_selection["link"]) # (urls, chapter_markers, cover_image_url, expected_time)
+
+    # Use scraper.py to download book info, scraper now downloads all the files to tmp_dir itself
+    book_data = scraper.getBook(book_selection["link"], tmp_dir) # (chapter_markers, expected_time)
 
     if book_data:
-        print(f"Found {len(book_data[0])} parts")
-        input("Enter to download")
-
+        # Reformat returned tuple for easier readability
         book_title = book_selection["title"]
         book_author = book_selection["author"]
-        book_urls = book_data[0]
-        book_chapter_markers = book_data[1]
-        book_cover_image_url = book_data[2]
-        book_expected_length = book_data[3]
-
-        # Create tmp directory with absolute path
-        tmp_dir = os.path.abspath(os.path.join(os.getcwd(), "tmp"))
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir, mode=0o755)
+        book_chapter_markers = book_data[0]
+        book_expected_length = book_data[1]
 
         # Save current cookies for upcoming downloads
         cookies = scraper.getCookies()
@@ -165,16 +166,11 @@ for title_index in title_selections:
 
         os.makedirs(download_path, exist_ok=True)
 
-        # Use absolute paths for all file operations
-        cover_path = os.path.abspath(os.path.join(tmp_dir, "cover.jpg"))
-        
-        if overdrive_download.downloadCover(book_cover_image_url, cover_path, cookies):
-            print("Downloaded Cover")
 
         if config.get("download_thunder_metadata", 0) or config.get("convert_audiobookshelf_metadata", 0):
             # Both of these require thunder metadata.
             metadata_path = os.path.abspath(os.path.join(download_path, 'info.json'))
-            chapters_path = os.path.abspath(os.path.join(download_path,'chapters.json'))
+            chapters_path = os.path.abspath(os.path.join(download_path, 'chapters.json'))
             with open(chapters_path, 'w') as f:
                 json.dump(book_chapter_markers, f)
             if overdrive_download.downloadThunderMetadata(book_selection["id"], metadata_path):
@@ -187,18 +183,6 @@ for title_index in title_selections:
                         os.unlink(chapters_path)
                         print("Cleaned up json metadata")
 
-        if not overdrive_download.downloadMP3(book_urls, tmp_dir, cookies):
-            raise InterruptedError
-        print("Downloaded Audio")
-
-        duration = convert_metadata.get_total_duration(tmp_dir)
-        expected_duration = convert_metadata.to_seconds(book_expected_length)
-        if duration/expected_duration < 0.9:
-            # Did we get WAY too little audio?
-            pct = int(100 * duration/expected_duration)
-            print(f"WARNING: found only {pct}% of expected audio.")
-            if config.get("abort_on_warning", 0):
-                sys.exit(3)
 
         if config.get("skip_reencode", 0):
             # Just copy everything to the dest.
