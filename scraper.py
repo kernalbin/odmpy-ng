@@ -140,6 +140,15 @@ class Scraper:
                     if part_id not in urls:
                         urls[part_id] = request.url
         return urls
+    
+    def extract_minutes_to_seconds(self, raw_text):
+        if not raw_text:
+            return False
+        cleaned = raw_text.strip().lower()  # remove whitespace and lowercase
+        if cleaned.endswith("m"):
+            minutes = int(cleaned[:-1])  # remove the 'm' and convert to seconds
+            return minutes * 60
+        return False
 
     def getBook(self, selected_title_link, download_path):
         # Go to book listen page
@@ -166,7 +175,7 @@ class Scraper:
         # Go to beginning of book timeline
         while chapter_previous.is_enabled():
             chapter_previous.click()
-            time.sleep(.2)
+            time.sleep(.1)
         time.sleep(1)
 
         expected_time = timeline_length.get_attribute("textContent").replace("-", "")
@@ -183,7 +192,7 @@ class Scraper:
         while chapter_next.is_enabled():
             print(timeline_percent.text)
             chapter_next.click()
-            time.sleep(2)
+            time.sleep(1)
             if not chapter_title.get_attribute("textContent") in chapter_markers:
                 chapter_markers[chapter_title.get_attribute("textContent")] = timeline_current_time.get_attribute("textContent")
 
@@ -192,7 +201,7 @@ class Scraper:
         # Go to beginning of the book timeline again
         while chapter_previous.is_enabled():
             chapter_previous.click()
-            time.sleep(.2)
+            time.sleep(.1)
 
         # In order downloading of files
         print("Getting files")
@@ -203,12 +212,26 @@ class Scraper:
         part_num = 1
         expected_duration = convert_metadata.to_seconds(expected_time)
 
+        # Main loop for walking through book
         while True:
             current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+
+            # Skip to end of previously downloaded segment
             while current_location < total_duration:
+
+                # Check if chapter is shorter than where the next part starts, and if so, can skip the whole chapter
+                next_chapter_seconds = self.extract_minutes_to_seconds(chapter_next.get_attribute("textContent"))
+                if total_duration-current_location > next_chapter_seconds:
+                    chapter_next.click()
+                    print(f"Skipped chapter - {next_chapter_seconds} seconds")
+                    time.sleep(.5)
+                    current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+
+                # Jump by 15 seconds until we reach the end of the part
                 time_next.click()
                 current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
 
+            # Collect available urls, and download next part
             mp3_urls = self.requestsToMP3Files()
 
             url = mp3_urls.get(f"{part_num:02d}")
@@ -218,10 +241,11 @@ class Scraper:
 
             length = overdrive_download.downloadMP3Part(url, f"{part_num:02d}", download_path, self.getCookies())
 
+            # If valid download, add the length of the part to the total, check progress through whole book
             if length:
                 total_duration += length
                 print(f"{total_duration:.2f}/{expected_duration:.2f} sec  -  {total_duration/expected_duration*100:.2f}%")
-                if total_duration*0.98 >= expected_duration:
+                if total_duration >= expected_duration*0.98:
                     print("Downloaded complete audio")
                     print(f"Book contained {part_num} part(s)")
                     break

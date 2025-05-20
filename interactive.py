@@ -200,6 +200,8 @@ for title_index in title_selections:
             ffmetadata.writeMetaFile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
             
             print("Adding metadata to audiobook")
+            cover_path = os.path.abspath(os.path.join(tmp_dir, "cover.jpg"))
+
             output_file = os.path.abspath(os.path.join(download_path, book_title.replace(" ", "")+".m4b"))
             if file_conversions.encodeMetadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
                 print("Finished file created")
