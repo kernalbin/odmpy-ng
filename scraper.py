@@ -5,8 +5,11 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
-import time
+import overdrive_download
+import convert_metadata
+import os, time, sys
 
 class Scraper:
     """Overdrive Audiobook Scraper"""
@@ -127,54 +130,8 @@ class Scraper:
                 print(f"Failed to parse loan at index {index}: {e}")
 
         return books
-
-    def getBook(self, selected_title_link):
-
-        self.driver.get(selected_title_link)
-
-        time.sleep(1)
-
-        chapter_previous = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-prev-button')
-        chapter_next = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-next-button')
-
-        time_previous = self.driver.find_element(By.CLASS_NAME, 'playback-controls-left')
-        time_next = self.driver.find_element(By.CLASS_NAME, 'playback-controls-right')
-
-        timeline_percent = self.driver.find_element(By.CLASS_NAME, 'timeline-percent-visual')
-
-        timeline_length = self.driver.find_element(By.CLASS_NAME, 'timeline-end-minutes').find_element(By.CLASS_NAME, 'place-phrase-visual')
-        timeline_current_time = self.driver.find_element(By.CLASS_NAME, 'timeline-start-minutes').find_element(By.CLASS_NAME, 'place-phrase-visual')
-
-        chapter_title = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-title')
-
-        time.sleep(1)
-
-        while chapter_previous.is_enabled():
-            chapter_previous.click()
-            time.sleep(.2)
-        time.sleep(1)
-
-        expected_time = timeline_length.get_attribute("textContent").replace("-", "")
-        print(f"End file should be ~{expected_time} in length.")
-
-        chapter_markers = {}
-
-        chapter_markers[chapter_title.get_attribute("textContent")] = timeline_current_time.get_attribute("textContent")
-
-        while chapter_next.is_enabled():
-            print(timeline_percent.text)
-            chapter_next.click()
-            time.sleep(2)
-            if not chapter_title.get_attribute("textContent") in chapter_markers:
-                chapter_markers[chapter_title.get_attribute("textContent")] = timeline_current_time.get_attribute("textContent")
-            for i in range(2):
-                time_previous.click()
-                time.sleep(.15)
-            for i in range(4):
-                time_next.click()
-                time.sleep(.15)
-            time.sleep(.3)
-
+    
+    def requestsToMP3Files(self) -> dict:
         urls = {}
 
         for request in self.driver.requests:
@@ -183,8 +140,146 @@ class Scraper:
                     part_id = request.url.split("Part")[1].split(".mp3")[0]
                     if part_id not in urls:
                         urls[part_id] = request.url
+        return urls
+    
+    def extract_minutes_to_seconds(self, raw_text):
+        if not raw_text:
+            return False
+        cleaned = raw_text.strip().lower()  # remove whitespace and lowercase
+        if cleaned.endswith("m"):
+            minutes = int(cleaned[:-1])  # remove the 'm' and convert to seconds
+            return minutes * 60
+        return False
+
+    def getBook(self, selected_title_link, download_path):
+        # Go to book listen page
+        self.driver.get(selected_title_link)
+
+        time.sleep(1)
+
+        # Collect used elements for navigation
+        chapter_previous = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-prev-button')
+        chapter_next = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-next-button')
+
+        timeline_length = self.driver.find_element(By.CLASS_NAME, 'timeline-end-minutes').find_element(By.CLASS_NAME, 'place-phrase-visual')
+        timeline_current_time = self.driver.find_element(By.CLASS_NAME, 'timeline-start-minutes').find_element(By.CLASS_NAME, 'place-phrase-visual')
+
+        chapter_table_open = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-title-button')
+
+        time.sleep(1)
+
+        # Just parse chapter table in webviewer
+        print("Getting chapters")
+
+        chapter_markers = {}
+
+        chapter_table_open.click()
+        time.sleep(1)
+
+        chapter_title_elements = self.driver.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
+        chapter_time_elements = self.driver.find_elements(By.CLASS_NAME, 'place-phrase-visual')
+
+
+        chapter_times = []
+
+        for elem in chapter_time_elements:
+            if elem.text:
+                chapter_times.append(elem.text)
+
+        for index, title in enumerate(chapter_title_elements):
+            chapter_markers[title.text] = chapter_times[index]
+        
+        chapter_table_close = self.driver.find_element(By.CLASS_NAME, 'shibui-shield')
+
+        chapter_table_close.click()
+        time.sleep(1)
+
+        print(chapter_markers)
+
+        print("Got chapters")
+
+        # Go to beginning of book timeline
+        while chapter_previous.is_enabled():
+            chapter_previous.click()
+            time.sleep(.1)
+        time.sleep(1)
+
+        expected_time = timeline_length.get_attribute("textContent").replace("-", "")
+        print(f"End file should be ~{expected_time} in length.")
+
+
+        # In order downloading of files
+        print("Getting files")
+
+        mp3_urls = self.requestsToMP3Files()
+        total_duration = 0
+        current_location = 0
+        part_num = 1
+        expected_duration = convert_metadata.to_seconds(expected_time)
+        missing_flag = False
+
+        # Main loop for walking through book
+        while True:
+            current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+
+            # Skip to end of previously downloaded segment
+            while current_location < total_duration:
+
+                if not missing_flag:
+                    # Check if chapter is shorter than where the next part starts, and if so, can skip the whole chapter
+                    next_chapter_seconds = self.extract_minutes_to_seconds(chapter_next.get_attribute("textContent"))
+                    if total_duration-current_location > next_chapter_seconds:
+                        chapter_next.click()
+                        # print(f"Skipped chapter - {next_chapter_seconds} seconds")
+                        time.sleep(.5)
+                        current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+
+                # # Jump by 15 seconds until we reach the end of the part
+                # time_next.click()
+
+                # Jump by 1 minute using page_down
+                self.driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_DOWN)
+                current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+
+            # Collect available urls, and download next part
+            mp3_urls = self.requestsToMP3Files()
+
+            url = mp3_urls.get(f"{part_num:02d}")
+            if not url:
+                print(f"Missing part {part_num}")
+                print("Trying to go back")
+                chapter_previous.click()
+                missing_flag = True
+                continue
+
+            length = overdrive_download.downloadMP3Part(url, f"{part_num:02d}", download_path, self.getCookies())
+
+            # If valid download, add the length of the part to the total, check progress through whole book
+            if length:
+                total_duration += length
+                print(f"{total_duration:.2f}/{expected_duration:.2f} sec  -  {total_duration/expected_duration*100:.2f}%")
+                if total_duration >= expected_duration-1:
+                    print("Downloaded complete audio")
+                    print(f"Book contained {part_num} part(s)")
+                    break
+                part_num += 1
+                missing_flag = False
+            else:
+                print(f"Download failed for part {part_num}")
+                sys.exit(3)
+
+        
+        # Set cover image url
+        for request in self.driver.requests:
+            if request.response:
                 if '.jpg' in request.url:
                     if 'listen.overdrive.com' in request.url:
                         cover_image_url = request.url
 
-        return (urls, chapter_markers, cover_image_url, expected_time)
+        # Designate cover path
+        cover_path = os.path.abspath(os.path.join(download_path, "cover.jpg"))
+
+        if overdrive_download.downloadCover(cover_image_url, cover_path, self.getCookies(), self.config.get("abort_on_warning", False)):
+            print("Downloaded cover")
+
+        return (chapter_markers, expected_time)
