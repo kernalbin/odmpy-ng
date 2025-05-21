@@ -17,8 +17,7 @@ def generatePartslistM4B(tmp_dir, download_path):
             # Use absolute paths in the partlist file
             abs_path = os.path.abspath(os.path.join(download_path, file))
             f.write(f"file '{abs_path}'\n")
-            print(abs_path)
-            
+
     return partlist_file
 
 def getMP3Files(download_path):
