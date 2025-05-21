@@ -258,7 +258,7 @@ class Scraper:
             if length:
                 total_duration += length
                 print(f"{total_duration:.2f}/{expected_duration:.2f} sec  -  {total_duration/expected_duration*100:.2f}%")
-                if total_duration >= expected_duration*0.98:
+                if total_duration >= expected_duration-1:
                     print("Downloaded complete audio")
                     print(f"Book contained {part_num} part(s)")
                     break
@@ -279,7 +279,7 @@ class Scraper:
         # Designate cover path
         cover_path = os.path.abspath(os.path.join(download_path, "cover.jpg"))
 
-        if overdrive_download.downloadCover(cover_image_url, cover_path, self.getCookies()):
+        if overdrive_download.downloadCover(cover_image_url, cover_path, self.getCookies(), self.config.get("abort_on_warning", False)):
             print("Downloaded cover")
 
         return (chapter_markers, expected_time)

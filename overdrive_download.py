@@ -4,7 +4,8 @@ import convert_metadata
 headers = {'User-Agent': 'Mozilla/5.0'}
 
 
-def downloadMP3Part(url, part_id, download_path, cookies) -> int: # Downloads mp3 part to download_path/part[ID].mp3 and returns the length in seconds
+def downloadMP3Part(url, part_id, download_path, cookies) -> int:
+    "Downloads mp3 part to download_path/part[ID].mp3 and returns the length in seconds"
     if not os.path.exists(download_path):
         os.makedirs(download_path)
 
@@ -23,7 +24,8 @@ def downloadMP3Part(url, part_id, download_path, cookies) -> int: # Downloads mp
         return 0
 
 
-def downloadCover(cover_url, download_path, cookies): # Downloads cover image to download_path and returns True if successful
+def downloadCover(cover_url, download_path, cookies, abort=False):
+    "Downloads cover image to download_path and returns True if successful"
 
     cookie_dict = {cookie['name']: cookie['value'] for cookie in cookies}
 
@@ -34,9 +36,12 @@ def downloadCover(cover_url, download_path, cookies): # Downloads cover image to
                 f.write(chunk)
         return True
     print(f"Failed to download cover with status code {response.status_code}")
+    if abort:
+        response.raise_for_status()
     return False
 
-def downloadThunderMetadata(book_id: int, download_path): # Downloads thunder API book metadata to download_path
+def downloadThunderMetadata(book_id: int, download_path):
+    "Downloads thunder API book metadata to download_path"
     api_url = f"https://thunder.api.overdrive.com/v2/media/{book_id}"
 
     response = requests.get(api_url)

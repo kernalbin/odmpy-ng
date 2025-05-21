@@ -1,14 +1,24 @@
-import subprocess, os, multiprocessing, queue
+import subprocess, os, multiprocessing, re
 
 def generatePartslistM4B(tmp_dir, download_path):
     partlist_file = os.path.join(tmp_dir, 'partlist.txt')
 
+    def extract_partnum(filename):
+        match = re.search(r'(\d+)', filename)
+        return int(match.group(1)) if match else -1
+
     with open(partlist_file, 'w') as f: 
-        for file in os.listdir(download_path):
-            if file.endswith('.m4b'):
-                # Use absolute paths in the partlist file
-                abs_path = os.path.abspath(os.path.join(download_path, file))
-                f.write(f"file '{abs_path}'\n")
+        sorted_files = sorted(
+            [file for file in os.listdir(download_path) if file.endswith('.m4b')],
+            key=extract_partnum
+        )
+
+        for file in sorted_files:
+            # Use absolute paths in the partlist file
+            abs_path = os.path.abspath(os.path.join(download_path, file))
+            f.write(f"file '{abs_path}'\n")
+            print(abs_path)
+            
     return partlist_file
 
 def getMP3Files(download_path):
@@ -21,26 +31,6 @@ def getMP3Files(download_path):
             mp3files.append(abs_path)
 
     return mp3files
-
-# def concatMP3(tmp_dir, download_path, out_file):
-#     partlist_file = generatePartslist(tmp_dir, download_path)
-#     out_file = os.path.join(tmp_dir, out_file)
-
-#     try:
-#         result = subprocess.run([
-#             'ffmpeg', 
-#             '-y', 
-#             '-f', 'concat', 
-#             '-safe', '0', 
-#             '-i', partlist_file, 
-#             '-c', 'copy', 
-#             out_file
-#         ], check=False)
-        
-#         return result.returncode == 0 or result.returncode == 1
-#     except Exception as e:
-#         print(f"Error concatenating MP3 files: {e}")
-#         return False
     
 def concatM4B(tmp_dir, download_path, out_file):
     partlist_file = generatePartslistM4B(tmp_dir, download_path)
