@@ -161,17 +161,42 @@ class Scraper:
         chapter_previous = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-prev-button')
         chapter_next = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-next-button')
 
-        # time_previous = self.driver.find_element(By.CLASS_NAME, 'playback-controls-left')
-        # time_next = self.driver.find_element(By.CLASS_NAME, 'playback-controls-right')
-
-        timeline_percent = self.driver.find_element(By.CLASS_NAME, 'timeline-percent-visual')
-
         timeline_length = self.driver.find_element(By.CLASS_NAME, 'timeline-end-minutes').find_element(By.CLASS_NAME, 'place-phrase-visual')
         timeline_current_time = self.driver.find_element(By.CLASS_NAME, 'timeline-start-minutes').find_element(By.CLASS_NAME, 'place-phrase-visual')
 
-        chapter_title = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-title')
+        chapter_table_open = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-title-button')
 
         time.sleep(1)
+
+        # Just parse chapter table in webviewer
+        print("Getting chapters")
+
+        chapter_markers = {}
+
+        chapter_table_open.click()
+        time.sleep(1)
+
+        chapter_title_elements = self.driver.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
+        chapter_time_elements = self.driver.find_elements(By.CLASS_NAME, 'place-phrase-visual')
+
+
+        chapter_times = []
+
+        for elem in chapter_time_elements:
+            if elem.text:
+                chapter_times.append(elem.text)
+
+        for index, title in enumerate(chapter_title_elements):
+            chapter_markers[title.text] = chapter_times[index]
+        
+        chapter_table_close = self.driver.find_element(By.CLASS_NAME, 'shibui-shield')
+
+        chapter_table_close.click()
+        time.sleep(1)
+
+        print(chapter_markers)
+
+        print("Got chapters")
 
         # Go to beginning of book timeline
         while chapter_previous.is_enabled():
@@ -182,27 +207,6 @@ class Scraper:
         expected_time = timeline_length.get_attribute("textContent").replace("-", "")
         print(f"End file should be ~{expected_time} in length.")
 
-        # Jump through chapters and get chapter timestamps
-        # TODO: just parse chapter table in webviewer
-        print("Getting chapters")
-
-        chapter_markers = {}
-
-        chapter_markers[chapter_title.get_attribute("textContent")] = timeline_current_time.get_attribute("textContent")
-
-        while chapter_next.is_enabled():
-            print(timeline_percent.text)
-            chapter_next.click()
-            time.sleep(1)
-            if not chapter_title.get_attribute("textContent") in chapter_markers:
-                chapter_markers[chapter_title.get_attribute("textContent")] = timeline_current_time.get_attribute("textContent")
-
-        print("Got chapters")
-
-        # Go to beginning of the book timeline again
-        while chapter_previous.is_enabled():
-            chapter_previous.click()
-            time.sleep(.1)
 
         # In order downloading of files
         print("Getting files")
@@ -212,6 +216,7 @@ class Scraper:
         current_location = 0
         part_num = 1
         expected_duration = convert_metadata.to_seconds(expected_time)
+        missing_flag = False
 
         # Main loop for walking through book
         while True:
@@ -220,13 +225,14 @@ class Scraper:
             # Skip to end of previously downloaded segment
             while current_location < total_duration:
 
-                # Check if chapter is shorter than where the next part starts, and if so, can skip the whole chapter
-                next_chapter_seconds = self.extract_minutes_to_seconds(chapter_next.get_attribute("textContent"))
-                if total_duration-current_location > next_chapter_seconds:
-                    chapter_next.click()
-                    print(f"Skipped chapter - {next_chapter_seconds} seconds")
-                    time.sleep(.5)
-                    current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+                if not missing_flag:
+                    # Check if chapter is shorter than where the next part starts, and if so, can skip the whole chapter
+                    next_chapter_seconds = self.extract_minutes_to_seconds(chapter_next.get_attribute("textContent"))
+                    if total_duration-current_location > next_chapter_seconds:
+                        chapter_next.click()
+                        # print(f"Skipped chapter - {next_chapter_seconds} seconds")
+                        time.sleep(.5)
+                        current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
 
                 # # Jump by 15 seconds until we reach the end of the part
                 # time_next.click()
@@ -241,7 +247,10 @@ class Scraper:
             url = mp3_urls.get(f"{part_num:02d}")
             if not url:
                 print(f"Missing part {part_num}")
-                sys.exit(4)
+                print("Trying to go back")
+                chapter_previous.click()
+                missing_flag = True
+                continue
 
             length = overdrive_download.downloadMP3Part(url, f"{part_num:02d}", download_path, self.getCookies())
 
@@ -254,6 +263,7 @@ class Scraper:
                     print(f"Book contained {part_num} part(s)")
                     break
                 part_num += 1
+                missing_flag = False
             else:
                 print(f"Download failed for part {part_num}")
                 sys.exit(3)
