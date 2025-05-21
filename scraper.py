@@ -5,6 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
 import overdrive_download
 import convert_metadata
@@ -160,8 +161,8 @@ class Scraper:
         chapter_previous = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-prev-button')
         chapter_next = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-next-button')
 
-        time_previous = self.driver.find_element(By.CLASS_NAME, 'playback-controls-left')
-        time_next = self.driver.find_element(By.CLASS_NAME, 'playback-controls-right')
+        # time_previous = self.driver.find_element(By.CLASS_NAME, 'playback-controls-left')
+        # time_next = self.driver.find_element(By.CLASS_NAME, 'playback-controls-right')
 
         timeline_percent = self.driver.find_element(By.CLASS_NAME, 'timeline-percent-visual')
 
@@ -227,8 +228,11 @@ class Scraper:
                     time.sleep(.5)
                     current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
 
-                # Jump by 15 seconds until we reach the end of the part
-                time_next.click()
+                # # Jump by 15 seconds until we reach the end of the part
+                # time_next.click()
+
+                # Jump by 1 minute using page_down
+                self.driver.find_element(By.TAG_NAME, "body").send_keys(Keys.PAGE_DOWN)
                 current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
 
             # Collect available urls, and download next part
