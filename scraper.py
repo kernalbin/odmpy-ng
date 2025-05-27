@@ -9,11 +9,20 @@ from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
 import overdrive_download
 import convert_metadata
-import os, time, sys
+import os
+import time
+import sys
 
 class Scraper:
-    """Overdrive Audiobook Scraper"""
+    """Automated Overdrive audiobook downloader using Selenium."""
     def __init__(self, config, headless=True):
+        """
+        Initializes the scraper with user configuration and sets up the Chrome driver.
+
+        Args:
+            config (dict): Dictionary with keys 'library', 'user', 'pass', etc.
+            headless (bool): Whether to run the browser in headless mode.
+        """
         self.config = config
 
         # Fix URL construction - use the full library URL provided in config
@@ -36,22 +45,25 @@ class Scraper:
         self.driver = None
 
     def __del__(self):
-        self.driver.quit()
+        if self.driver:
+            self.driver.quit()
 
-    def getCookies(self):
+    def get_cookies(self):
+        """Returns the current browser session cookies."""
         return self.driver.get_cookies().copy()
 
     def _login(self) -> list[dict]:
-        # Need to sign in again
+        """Handles login logic and returns a fresh list of cookies."""
         print("Logging in...")
         self.driver.get(self.base_url + "/account/ozone/sign-in")
 
+        # Dismiss cookie banner if present
         try:
-            cookies_dialog = self.driver.find_element(By.CLASS_NAME, 'cookie-banner-close-button')
-            cookies_dialog.click()
+            self.driver.find_element(By.CLASS_NAME, 'cookie-banner-close-button').click()
         except:
             pass
 
+        # Enter credentials
         signin_button = self.driver.find_element(By.CLASS_NAME, 'signin-button')
         username_input = self.driver.find_element(By.ID, 'username')
         password_input = self.driver.find_element(By.ID, 'password')
@@ -69,13 +81,19 @@ class Scraper:
         if 'sign-in' in self.driver.current_url.lower():
             return []
 
-        return self.driver.get_cookies()
+        return self.get_cookies()
 
-    def ensureLogin(self, cookies: list[dict]) -> list[dict]: # Can pass in []
+    def ensure_login(self, cookies: list[dict]) -> list[dict]: # Can pass in []
+        """
+        Ensures the user is logged in; attempts to use existing cookies.
 
-        # Create webdriver session and add given cookies if they exist.
+        Args:
+            cookies (list[dict]): Optional pre-existing cookies.
+
+        Returns:
+            list[dict]: Valid session cookies.
+        """
         if not self.driver:
-            # Use webdriver-manager to handle Chrome driver installation and initialization
             service = Service(ChromeDriverManager().install())
             self.driver = webdriver.Chrome(service=service, options=self.chrome_options)
             self.driver.get(self.base_url)
@@ -101,8 +119,13 @@ class Scraper:
             # Get new valid session
             return self._login()
 
-    def getLoans(self):
+    def get_loans(self):
+        """
+        Retrieves all current audiobook loans for the user.
 
+        Returns:
+            list: List of dictionaries with book info: title, author, link, and ID.
+        """
         print("Finding books...")
         self.driver.get(self.base_url + "/account/loans")
 
@@ -111,7 +134,7 @@ class Scraper:
                 EC.presence_of_element_located((By.CLASS_NAME, 'Loans-TitleContainerRight'))
             )
         except Exception as e:
-            print(f"Failed to get loans, not loading correctly: {e}")
+            print(f"Failed to load loans: {e}")
             return []
 
         books = []
@@ -131,7 +154,13 @@ class Scraper:
 
         return books
     
-    def requestsToMP3Files(self) -> dict:
+    def requests_to_mp3_files(self) -> dict:
+        """
+        Extracts MP3 file URLs from the browser's request history.
+
+        Returns:
+            dict: Part ID to URL mapping.
+        """
         urls = {}
 
         for request in self.driver.requests:
@@ -142,7 +171,16 @@ class Scraper:
                         urls[part_id] = request.url
         return urls
     
-    def extract_minutes_to_seconds(self, raw_text):
+    def extract_minutes_to_seconds(self, raw_text: str):
+        """
+        Parses a string like '2m' to integer seconds.
+
+        Args:
+            raw_text (str): Text to parse.
+
+        Returns:
+            int or bool: Parsed seconds, or False on failure.
+        """
         if not raw_text:
             return False
         cleaned = raw_text.strip().lower()  # remove whitespace and lowercase
@@ -151,13 +189,22 @@ class Scraper:
             return minutes * 60
         return False
 
-    def getBook(self, selected_title_link, download_path):
+    def get_book(self, selected_title_link: str, download_path: str):
+        """
+        Downloads the selected audiobook and associated metadata.
+
+        Args:
+            selected_title_link (str): The "Listen Now" URL of the book.
+            download_path (str): Folder path to save the book to.
+
+        Returns:
+            tuple: (chapter_markers, total_expected_time)
+        """
         # Go to book listen page
         self.driver.get(selected_title_link)
-
         time.sleep(1)
 
-        # Collect used elements for navigation
+        # Fetch player elements
         chapter_previous = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-prev-button')
         chapter_next = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-next-button')
 
@@ -166,16 +213,13 @@ class Scraper:
 
         chapter_table_open = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-title-button')
 
-        time.sleep(1)
-
-        # Just parse chapter table in webviewer
+        # Get chapter metadata
         print("Getting chapters")
-
-        chapter_markers = {}
 
         chapter_table_open.click()
         time.sleep(1)
 
+        chapter_markers = {}
         chapter_title_elements = self.driver.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
         chapter_time_elements = self.driver.find_elements(By.CLASS_NAME, 'place-phrase-visual')
 
@@ -189,12 +233,10 @@ class Scraper:
         for index, title in enumerate(chapter_title_elements):
             chapter_markers[title.text] = chapter_times[index]
         
+        # Close chapter table
         chapter_table_close = self.driver.find_element(By.CLASS_NAME, 'shibui-shield')
-
         chapter_table_close.click()
         time.sleep(1)
-
-        print(chapter_markers)
 
         print("Got chapters")
 
@@ -205,13 +247,13 @@ class Scraper:
         time.sleep(1)
 
         expected_time = timeline_length.get_attribute("textContent").replace("-", "")
-        print(f"End file should be ~{expected_time} in length.")
+        print(f"Final book should be ~{expected_time} in length.")
 
 
-        # In order downloading of files
+        # Download part files
         print("Getting files")
 
-        mp3_urls = self.requestsToMP3Files()
+        mp3_urls = self.requests_to_mp3_files()
         total_duration = 0
         current_location = 0
         part_num = 1
@@ -242,7 +284,7 @@ class Scraper:
                 current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
 
             # Collect available urls, and download next part
-            mp3_urls = self.requestsToMP3Files()
+            mp3_urls = self.requests_to_mp3_files()
 
             url = mp3_urls.get(f"{part_num:02d}")
             if not url:
@@ -252,7 +294,7 @@ class Scraper:
                 missing_flag = True
                 continue
 
-            length = overdrive_download.downloadMP3Part(url, f"{part_num:02d}", download_path, self.getCookies())
+            length = overdrive_download.download_mp3_part(url, f"{part_num:02d}", download_path, self.get_cookies())
 
             # If valid download, add the length of the part to the total, check progress through whole book
             if length:
@@ -269,17 +311,14 @@ class Scraper:
                 sys.exit(3)
 
         
-        # Set cover image url
-        for request in self.driver.requests:
-            if request.response:
-                if '.jpg' in request.url:
-                    if 'listen.overdrive.com' in request.url:
-                        cover_image_url = request.url
+        # Attempt to find and save cover image
+        cover_image_url = next(
+            (req.url for req in self.driver.requests if req.response and '.jpg' in req.url and 'listen.overdrive.com' in req.url),
+            None
+        )
 
-        # Designate cover path
         cover_path = os.path.abspath(os.path.join(download_path, "cover.jpg"))
-
-        if overdrive_download.downloadCover(cover_image_url, cover_path, self.getCookies(), self.config.get("abort_on_warning", False)):
+        if overdrive_download.download_cover(cover_image_url, cover_path, self.get_cookies(), self.config.get("abort_on_warning", False)):
             print("Downloaded cover")
 
         return (chapter_markers, expected_time)

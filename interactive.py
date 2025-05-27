@@ -109,7 +109,7 @@ if cookies:
 scraper = Scraper(scraper_config)
 
 # Login to the chosen library, and save the cookies to a file.
-cookies = scraper.ensureLogin(cookies)
+cookies = scraper.ensure_login(cookies)
 
 if not cookies:
     print("Sign in failed")
@@ -119,7 +119,7 @@ with open("cookies", "w") as f:
     json.dump(cookies, f, indent=4)
 
 # Collect list of loans
-books = scraper.getLoans() # [{"index": 0, "title": "", "author": "", "link": "", "id": 0}]
+books = scraper.get_loans() # [{"index": 0, "title": "", "author": "", "link": "", "id": 0}]
 
 # Print loans for selection by user
 for book in books:
@@ -146,7 +146,7 @@ for title_index in title_selections:
 
 
     # Use scraper.py to download book info, scraper now downloads all the files to tmp_dir itself
-    book_data = scraper.getBook(book_selection["link"], tmp_dir) # (chapter_markers, expected_time)
+    book_data = scraper.get_book(book_selection["link"], tmp_dir) # (chapter_markers, expected_time)
 
     if book_data:
         # Reformat returned tuple for easier readability
@@ -156,7 +156,7 @@ for title_index in title_selections:
         book_expected_length = book_data[1]
 
         # Save current cookies for upcoming downloads
-        cookies = scraper.getCookies()
+        cookies = scraper.get_cookies()
 
         # Filter to remove punctuation from book title/author for file path
         filter_table = str.maketrans(dict.fromkeys(string.punctuation))
@@ -173,7 +173,7 @@ for title_index in title_selections:
             chapters_path = os.path.abspath(os.path.join(download_path, 'chapters.json'))
             with open(chapters_path, 'w') as f:
                 json.dump(book_chapter_markers, f)
-            if overdrive_download.downloadThunderMetadata(book_selection["id"], metadata_path):
+            if overdrive_download.download_thunder_metadata(book_selection["id"], metadata_path):
                 print("Downloaded json metadata")
                 if config.get("convert_audiobookshelf_metadata", 0):
                     convert_metadata.convert_file(metadata_path, book_expected_length)
@@ -190,20 +190,20 @@ for title_index in title_selections:
             for p in source.iterdir():
                 shutil.copy(p, dest)
         else:
-            if file_conversions.encodeAACMultiprocessing(tmp_dir, tmp_dir, config.get("low_quality_encode", 0), config.get("encoder_count", 4)):
+            if file_conversions.encode_aac_multiprocessing(tmp_dir, tmp_dir, config.get("low_quality_encode", 0), config.get("encoder_count", 4)):
                 print("Converted all files to AAC M4B")
 
-            if file_conversions.concatM4B(tmp_dir, tmp_dir, 'temp.m4b'):
+            if file_conversions.concat_m4b(tmp_dir, tmp_dir, 'temp.m4b'):
                 print("Converted to single M4B")
 
             print("Generating metadata")
-            ffmetadata.writeMetaFile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
+            ffmetadata.write_metafile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
             
             print("Adding metadata to audiobook")
             cover_path = os.path.abspath(os.path.join(tmp_dir, "cover.jpg"))
 
             output_file = os.path.abspath(os.path.join(download_path, book_title.replace(" ", "")+".m4b"))
-            if file_conversions.encodeMetadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
+            if file_conversions.encode_metadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
                 print("Finished file created")
                 # Clean up temporary files
                 try:
