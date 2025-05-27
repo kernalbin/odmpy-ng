@@ -109,7 +109,7 @@ if cookies:
 scraper = Scraper(scraper_config)
 
 # Login to the chosen library, and save the cookies to a file.
-cookies = scraper.ensureLogin(cookies)
+cookies = scraper.ensure_login(cookies)
 
 if not cookies:
     print("Sign in failed")
@@ -119,7 +119,7 @@ with open("cookies", "w") as f:
     json.dump(cookies, f, indent=4)
 
 # Collect list of loans
-books = scraper.getLoans() # [{"index": 0, "title": "", "author": "", "link": "", "id": 0}]
+books = scraper.get_loans() # [{"index": 0, "title": "", "author": "", "link": "", "id": 0}]
 
 # Print loans for selection by user
 for book in books:
@@ -130,32 +130,33 @@ selections_input = input("0,1,2-6 : ")
 
 title_selections = parse_input(selections_input, books)
 
+
+
 # For each selected book, get the data
 for title_index in title_selections:
+    # Create tmp directory with absolute path
+    tmp_dir = os.path.abspath(os.path.join(os.getcwd(), "tmp"))
+    if not os.path.exists(tmp_dir):
+        os.makedirs(tmp_dir, mode=0o755)
+
+    # Get book selection from index
     book_selection = get_book_by_index(title_index, books)
 
     print(f"Accessing {book_selection["title"]}, ID: {book_selection["id"]}")
 
-    book_data = scraper.getBook(book_selection["link"]) # (urls, chapter_markers, cover_image_url, expected_time)
+
+    # Use scraper.py to download book info, scraper now downloads all the files to tmp_dir itself
+    book_data = scraper.get_book(book_selection["link"], tmp_dir) # (chapter_markers, expected_time)
 
     if book_data:
-        print(f"Found {len(book_data[0])} parts")
-        input("Enter to download")
-
+        # Reformat returned tuple for easier readability
         book_title = book_selection["title"]
         book_author = book_selection["author"]
-        book_urls = book_data[0]
-        book_chapter_markers = book_data[1]
-        book_cover_image_url = book_data[2]
-        book_expected_length = book_data[3]
-
-        # Create tmp directory with absolute path
-        tmp_dir = os.path.abspath(os.path.join(os.getcwd(), "tmp"))
-        if not os.path.exists(tmp_dir):
-            os.makedirs(tmp_dir, mode=0o755)
+        book_chapter_markers = book_data[0]
+        book_expected_length = book_data[1]
 
         # Save current cookies for upcoming downloads
-        cookies = scraper.getCookies()
+        cookies = scraper.get_cookies()
 
         # Filter to remove punctuation from book title/author for file path
         filter_table = str.maketrans(dict.fromkeys(string.punctuation))
@@ -165,19 +166,14 @@ for title_index in title_selections:
 
         os.makedirs(download_path, exist_ok=True)
 
-        # Use absolute paths for all file operations
-        cover_path = os.path.abspath(os.path.join(tmp_dir, "cover.jpg"))
-        
-        if overdrive_download.downloadCover(book_cover_image_url, cover_path, cookies):
-            print("Downloaded Cover")
 
         if config.get("download_thunder_metadata", 0) or config.get("convert_audiobookshelf_metadata", 0):
             # Both of these require thunder metadata.
             metadata_path = os.path.abspath(os.path.join(download_path, 'info.json'))
-            chapters_path = os.path.abspath(os.path.join(download_path,'chapters.json'))
+            chapters_path = os.path.abspath(os.path.join(download_path, 'chapters.json'))
             with open(chapters_path, 'w') as f:
                 json.dump(book_chapter_markers, f)
-            if overdrive_download.downloadThunderMetadata(book_selection["id"], metadata_path):
+            if overdrive_download.download_thunder_metadata(book_selection["id"], metadata_path):
                 print("Downloaded json metadata")
                 if config.get("convert_audiobookshelf_metadata", 0):
                     convert_metadata.convert_file(metadata_path, book_expected_length)
@@ -187,18 +183,6 @@ for title_index in title_selections:
                         os.unlink(chapters_path)
                         print("Cleaned up json metadata")
 
-        if not overdrive_download.downloadMP3(book_urls, tmp_dir, cookies):
-            raise InterruptedError
-        print("Downloaded Audio")
-
-        duration = convert_metadata.get_total_duration(tmp_dir)
-        expected_duration = convert_metadata.to_seconds(book_expected_length)
-        if duration/expected_duration < 0.9:
-            # Did we get WAY too little audio?
-            pct = int(100 * duration/expected_duration)
-            print(f"WARNING: found only {pct}% of expected audio.")
-            if config.get("abort_on_warning", 0):
-                sys.exit(3)
 
         if config.get("skip_reencode", 0):
             # Just copy everything to the dest.
@@ -206,18 +190,20 @@ for title_index in title_selections:
             for p in source.iterdir():
                 shutil.copy(p, dest)
         else:
-            if file_conversions.encodeAACMultiprocessing(tmp_dir, tmp_dir, config.get("low_quality_encode", 0), config.get("encoder_count", 4)):
+            if file_conversions.encode_aac_multiprocessing(tmp_dir, tmp_dir, config.get("low_quality_encode", 0), config.get("encoder_count", 4)):
                 print("Converted all files to AAC M4B")
 
-            if file_conversions.concatM4B(tmp_dir, tmp_dir, 'temp.m4b'):
+            if file_conversions.concat_m4b(tmp_dir, tmp_dir, 'temp.m4b'):
                 print("Converted to single M4B")
 
             print("Generating metadata")
-            ffmetadata.writeMetaFile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
+            ffmetadata.write_metafile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
             
             print("Adding metadata to audiobook")
+            cover_path = os.path.abspath(os.path.join(tmp_dir, "cover.jpg"))
+
             output_file = os.path.abspath(os.path.join(download_path, book_title.replace(" ", "")+".m4b"))
-            if file_conversions.encodeMetadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
+            if file_conversions.encode_metadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
                 print("Finished file created")
                 # Clean up temporary files
                 try:
