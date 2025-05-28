@@ -47,7 +47,7 @@ Requirements:
 - `pip install -r requirements.txt`
 
 ```bash
-git clone htttps://github.com/kernalbin/odmpy-ng.git
+git clone https://github.com/kernalbin/odmpy-ng.git
 cd odmpy-ng
 python interactive.py \[config_file_path\]
 ```
