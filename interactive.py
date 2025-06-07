@@ -217,7 +217,8 @@ def main():
             print("Adding metadata to audiobook")
             cover_path = os.path.abspath(os.path.join(tmp_dir, "cover.jpg"))
 
-            output_file = os.path.abspath(os.path.join(download_path, book_title.replace(" ", "")+".m4b"))
+            sanitized_title = book_title.translate(filter_table).replace(" ", "")
+            output_file = os.path.abspath(os.path.join(download_path, sanitized_title + ".m4b"))
             
             if file_conversions.encode_metadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
                 print("Finished file created")

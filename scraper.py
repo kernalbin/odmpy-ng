@@ -185,7 +185,7 @@ class Scraper:
             return False
         cleaned = raw_text.strip().lower()  # remove whitespace and lowercase
         if cleaned.endswith("m"):
-            minutes = int(cleaned[:-1])  # remove the 'm' and convert to seconds
+            minutes = int(cleaned[:-1].replace(',', ''))  # remove the 'm' and convert to seconds
             return minutes * 60
         return False
 
