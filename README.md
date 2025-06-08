@@ -9,6 +9,7 @@
 - Interactive or Docker-based audiobook downloader for OverDrive
 - Scrapes audio URLs, chapters, and cover images
 - Converts MP3s into .m4b files with embedded chapter metadata
+- Generates metadata.json compatible with Audiobookshelf
 - Customizable and automated scraping via Selenium
 
 ---
