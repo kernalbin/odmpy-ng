@@ -5,6 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import ElementClickInterceptedException
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
 import overdrive_download
@@ -135,7 +136,7 @@ class Scraper:
             )
         except Exception as e:
             print(f"Failed to load loans: {e}")
-            return []
+            sys.exit(4)
 
         books = []
         loan_blocks = self.driver.find_elements(By.CLASS_NAME, 'Loans-TitleContainerRight')
@@ -290,7 +291,11 @@ class Scraper:
             if not url:
                 print(f"Missing part {part_num}")
                 print("Trying to go back")
-                chapter_previous.click()
+                try:
+                    chapter_previous.click()
+                except ElementClickInterceptedException:
+                    print("Unable to skip to last chapter")
+                    
                 missing_flag = True
                 continue
 
