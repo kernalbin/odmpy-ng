@@ -141,7 +141,7 @@ def main():
 
     # Print loans for selection by user
     for book in books:
-        print(f"{book["index"]}: {book["title"]} - {book["author"]}")
+        print(f"{book['index']}: {book['title']} - {book['author']}")
 
     selections_input = input("Select a title to download (e.g., 0,1,2-3): ")
     title_selections = parse_book_selection_input(selections_input, books)
@@ -154,7 +154,7 @@ def main():
 
         # Get book selection from index
         book_selection = get_book_by_index(title_index, books)
-        print(f"Accessing {book_selection["title"]}, ID: {book_selection["id"]}")
+        print(f"Accessing {book_selection['title']}, ID: {book_selection['id']}")
 
         # Use scraper.py to download book
         book_data = scraper.get_book(book_selection["link"], tmp_dir) # (chapter_markers, expected_time)
