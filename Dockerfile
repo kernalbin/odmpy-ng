@@ -25,5 +25,8 @@ COPY entrypoint.sh /entrypoint.sh
 # Make entrypoint executable
 RUN chmod +x /entrypoint.sh
 
+# Supress pkg_resources deprecation warning until upstream resolves
+ENV PYTHONWARNINGS="ignore:pkg_resources is deprecated as an API"
+
 # default command to run the app
 CMD ["/entrypoint.sh"]
