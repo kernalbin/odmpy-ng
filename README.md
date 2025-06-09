@@ -50,7 +50,7 @@ Requirements:
 ```bash
 git clone https://github.com/kernalbin/odmpy-ng.git
 cd odmpy-ng
-python interactive.py \[config_file_path\]
+python interactive.py [config_file_path]
 ```
 
 > **Note:** You may want to modify the default download path
