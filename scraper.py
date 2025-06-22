@@ -302,8 +302,14 @@ class Scraper:
             lower_bound = int(loaded_duration)
             upper_bound = int(min(loaded_duration + 30*60, expected_duration)) # 30 minutes
             print(f"Missing part {part_num} between ({lower_bound}, {upper_bound}) sec")
+            old_upper_bound = None
             while not self.has_url(part_num):
+                # Require progress on each iteration.
+                if upper_bound == old_upper_bound:
+                    raise Exception(f"Need more precise search for {upper_bound - lower_bound}s range between {lower_bound}, {upper_bound}")
+                old_upper_bound = upper_bound
                 current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+
                 # First, see if there's a chapter mark that divides our range.
                 desired_chapter = self.assess_chapter(chapter_seconds, upper_bound)
                 desired_chapter_start = chapter_seconds[desired_chapter]
@@ -311,7 +317,10 @@ class Scraper:
                 current_chapter_start = chapter_seconds[current_chapter]
                 if desired_chapter_start >= lower_bound and desired_chapter_start != current_location:
                     offset = current_location - current_chapter_start
-                    print(f"Skipping from chapter {current_chapter} + {offset}s to {desired_chapter}.")
+                    # HACK: remove the slice below before merge.
+                    low, high = sorted([current_chapter, desired_chapter])
+                    span = desired_chapter_start - current_location
+                    print(f"Skipping from chapter {current_chapter} + {offset}s to {desired_chapter}, span {span}s. Chs: {chapter_seconds[low:high+1]}")
                     if desired_chapter <= current_chapter:
                         if offset:
                             # Chapter markers are at the beginning, so going backward might take one extra click.
@@ -326,8 +335,13 @@ class Scraper:
                             chapter_next.click()
                             time.sleep(1)
                             current_chapter += 1
+                        if upper_bound == loaded_duration:
+                            # Can get to the end of the audio with one more click.
+                            chapter_next.click()
+                            time.sleep(1)
                     current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
                     if current_location != desired_chapter_start:
+                        # This is just a sanity check, caught some errors once though.
                         current_chapter = self.assess_chapter(chapter_seconds, current_location)
                         current_chapter_start = chapter_seconds[current_chapter]
                         raise Exception(f"failed to find start of chapter {desired_chapter}, actually ch{current_chapter} + {current_location - current_chapter_start}")
@@ -338,6 +352,7 @@ class Scraper:
                     continue
                 # Next, try to use the minute-skip key to get into the range.
                 body = self.driver.find_element(By.TAG_NAME, "body")
+                old_location = current_location
                 while current_location <= lower_bound and current_location <= upper_bound-60 and not self.has_url(part_num):
                     # ffwd into the range if you can, without going past it.
                     body.send_keys(Keys.PAGE_DOWN)
@@ -351,10 +366,15 @@ class Scraper:
                 if self.has_url(part_num):
                     # Shortcut if we're done.
                     continue
+                if old_location != current_location:
+                    dir = "forward" if old_location < current_location else "backward"
+                    mins = abs(old_location - current_location) / 60
+                    print(f"Skipped {dir} {mins:.2f} mins")
                 if lower_bound < current_location <= upper_bound:
                     # If the range was split, ignore the upper half.
                     upper_bound = current_location - 1
                 # Next, try to use the small-skip key to get into the new range.
+                old_location = current_location
                 while current_location <= lower_bound and current_location <= upper_bound-15 and not self.has_url(part_num):
                     # fwd into the range if you can, without going past it.
                     body.send_keys(Keys.ARROW_RIGHT)
@@ -367,10 +387,13 @@ class Scraper:
                     current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
                 if self.has_url(part_num):
                     continue
+                if old_location != current_location:
+                    dir = "forward" if old_location < current_location else "backward"
+                    mins = abs(old_location - current_location)
+                    print(f"Skipped {dir} {mins}s")
                 if lower_bound < current_location <= upper_bound:
                     # If the range was split, ignore the upper half.
                     upper_bound = current_location - 1
-                raise Exception(f"Need more precise search for {upper_bound - lower_bound}s range between {lower_bound}, {upper_bound}")
 
         # Attempt to find and save cover image
         cover_image_url = next(
