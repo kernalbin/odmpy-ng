@@ -306,7 +306,6 @@ class Scraper:
             # Get the marker for the chapter AFTER the biggest duration. (This
             # will be the end of the book if we go past that.)
             upper_bound = self.chapter_seconds[1 + self.chapter_containing(loaded_duration + 60*60)]
-            int(min(loaded_duration + 60*60, expected_duration)) # an hour should be more than any part
             print(f"Missing part {part_num} between ({lower_bound}, {upper_bound}) sec")
             old_upper_bound = None
             collapse_detected = False
@@ -336,6 +335,7 @@ class Scraper:
 
                 # Handle a "collapse" (lower==upper) by trying to search the whole book.
                 if not collapse_detected and lower_bound == upper_bound:
+                    print(f"Could not find part {part_num}, retrying by searching whole book.")
                     upper_bound = self.chapter_seconds[-1]
                     collapse_detected = True
 
@@ -356,7 +356,9 @@ class Scraper:
                     chapter_title_elements = self.driver.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
 
                     for index, title in enumerate(chapter_title_elements):
-                        if index == desired_chapter:
+                        # Go to the beginning of the chapter we need, or the
+                        # last chapter if we're trying to get to the end.
+                        if index == desired_chapter or (index == len(chapter_title_elements) - 1 and upper_bound == expected_duration):
                             title.click()
                             break
 
@@ -365,7 +367,7 @@ class Scraper:
                     chapter_table_close.click()
                     time.sleep(1)
 
-                    if upper_bound == loaded_duration:
+                    if upper_bound == expected_duration:
                         # Can get to the end of the audio with one more click.
                         chapter_next.click()
                         time.sleep(1)
@@ -377,7 +379,8 @@ class Scraper:
                         current_chapter_start = self.chapter_seconds[current_chapter]
                         raise Exception(f"failed to find start of chapter {desired_chapter}, actually ch{current_chapter} + {current_location - current_chapter_start}")
                     # If there's an internal split, it gives us a new upper bound.
-                    if lower_bound < current_location <= upper_bound:
+                    if not self.has_url(part_num) and lower_bound < current_location <= upper_bound:
+                        print(f"No URL for {part_num} at {upper_bound}, reducing to {current_location-1}.")
                         upper_bound = current_location - 1
                 if self.has_url(part_num):
                     continue
@@ -401,8 +404,8 @@ class Scraper:
                     dir = "forward" if old_location < current_location else "backward"
                     mins = abs(old_location - current_location) / 60
                     print(f"Skipped {dir} {mins:.2f} mins")
-                if lower_bound < current_location <= upper_bound:
-                    # If the range was split, ignore the upper half.
+                if not self.has_url(part_num) and lower_bound < current_location <= upper_bound:
+                    print(f"No URL for {part_num} at {upper_bound}, reducing to {current_location-1}.")
                     upper_bound = current_location - 1
                 # Next, try to use the small-skip key to get into the new range.
                 old_location = current_location
@@ -422,8 +425,8 @@ class Scraper:
                     dir = "forward" if old_location < current_location else "backward"
                     mins = abs(old_location - current_location)
                     print(f"Skipped {dir} {mins}s")
-                if lower_bound < current_location <= upper_bound:
-                    # If the range was split, ignore the upper half.
+                if not self.has_url(part_num) and lower_bound < current_location <= upper_bound:
+                    print(f"No URL for {part_num} at {upper_bound}, reducing to {current_location-1}.")
                     upper_bound = current_location - 1
 
         # Attempt to find and save cover image
