@@ -222,6 +222,8 @@ class Scraper:
         chapter_previous = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-prev-button')
         chapter_next = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-next-button')
 
+        toggle_play = self.driver.find_element(By.CLASS_NAME, 'playback-toggle')
+
         timeline_length = self.driver.find_element(By.CLASS_NAME, 'timeline-end-minutes').find_element(By.CLASS_NAME, 'place-phrase-visual')
         timeline_current_time = self.driver.find_element(By.CLASS_NAME, 'timeline-start-minutes').find_element(By.CLASS_NAME, 'place-phrase-visual')
 
@@ -304,11 +306,25 @@ class Scraper:
             print(f"Missing part {part_num} between ({lower_bound}, {upper_bound}) sec")
             old_upper_bound = None
             while not self.has_url(part_num):
+                current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+
                 # Require progress on each iteration.
                 if upper_bound == old_upper_bound:
+                    # One last effort.
+                    old_loc = current_location
+                    span = upper_bound - lower_bound
+                    try:
+                        toggle_play.click()
+                        while not self.has_url(part_num) and old_loc+span > current_location:
+                            time.sleep(1)
+                            current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+                    finally:
+                        toggle_play.click()
+                    if self.has_url(part_num):
+                        print(f"Found part by using play toggle between {lower_bound}, {upper_bound}")
+                        continue
                     raise Exception(f"Need more precise search for {upper_bound - lower_bound}s range between {lower_bound}, {upper_bound}")
                 old_upper_bound = upper_bound
-                current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
 
                 # First, see if there's a chapter mark that divides our range.
                 desired_chapter = self.assess_chapter(chapter_seconds, upper_bound)
@@ -317,28 +333,30 @@ class Scraper:
                 current_chapter_start = chapter_seconds[current_chapter]
                 if desired_chapter_start >= lower_bound and desired_chapter_start != current_location:
                     offset = current_location - current_chapter_start
-                    # HACK: remove the slice below before merge.
                     low, high = sorted([current_chapter, desired_chapter])
                     span = desired_chapter_start - current_location
                     print(f"Skipping from chapter {current_chapter} + {offset}s to {desired_chapter}, span {span}s. Chs: {chapter_seconds[low:high+1]}")
-                    if desired_chapter <= current_chapter:
-                        if offset:
-                            # Chapter markers are at the beginning, so going backward might take one extra click.
-                            chapter_previous.click()
-                            time.sleep(1)
-                        while desired_chapter < current_chapter:
-                            chapter_previous.click()
-                            time.sleep(1)
-                            current_chapter -= 1
-                    else:
-                        while desired_chapter > current_chapter:
-                            chapter_next.click()
-                            time.sleep(1)
-                            current_chapter += 1
-                        if upper_bound == loaded_duration:
-                            # Can get to the end of the audio with one more click.
-                            chapter_next.click()
-                            time.sleep(1)
+
+                    chapter_table_open.click()
+                    time.sleep(1)
+
+                    chapter_title_elements = self.driver.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
+
+                    for index, title in enumerate(chapter_title_elements):
+                        if index == desired_chapter:
+                            title.click()
+                            break
+
+                    # Close chapter table
+                    chapter_table_close = self.driver.find_element(By.CLASS_NAME, 'shibui-shield')
+                    chapter_table_close.click()
+                    time.sleep(1)
+
+                    if upper_bound == loaded_duration:
+                        # Can get to the end of the audio with one more click.
+                        chapter_next.click()
+                        time.sleep(1)
+
                     current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
                     if current_location != desired_chapter_start:
                         # This is just a sanity check, caught some errors once though.
