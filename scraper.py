@@ -25,6 +25,7 @@ class Scraper:
             headless (bool): Whether to run the browser in headless mode.
         """
         self.config = config
+        self.chapter_seconds = []
 
         # Fix URL construction - use the full library URL provided in config
         self.base_url = config["library"]
@@ -42,6 +43,7 @@ class Scraper:
         self.chrome_options.add_argument("--window-size=1920,1080")
         self.chrome_options.add_argument("--start-maximized")
         self.chrome_options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        self.chrome_options.add_argument("--mute-audio")
 
         self.driver = None
 
@@ -177,13 +179,13 @@ class Scraper:
                         urls[part_id] = request.url
         return urls
 
-    def assess_chapter(self, chapter_seconds, current_location) -> int:
+    def chapter_containing(self, current_location) -> int:
         # Don't enumerate the last element, it's actually the end of the book.
-        for i, start in enumerate(chapter_seconds[:-1]):
-            if current_location >= start and current_location < chapter_seconds[i+1]:
+        for i, start in enumerate(self.chapter_seconds[:-1]):
+            if current_location >= start and current_location < self.chapter_seconds[i+1]:
                 return i
         # Account for the end of the book.
-        return len(chapter_seconds) - 2
+        return len(self.chapter_seconds) - 2
     
     def extract_minutes_to_seconds(self, raw_text: str):
         """
@@ -241,12 +243,11 @@ class Scraper:
 
 
         chapter_times = []
-        chapter_seconds = []
 
         for elem in chapter_time_elements:
             if elem.text:
                 chapter_times.append(elem.text)
-                chapter_seconds.append(convert_metadata.to_seconds(elem.text))
+                self.chapter_seconds.append(convert_metadata.to_seconds(elem.text))
 
         for index, title in enumerate(chapter_title_elements):
             chapter_markers[title.text] = chapter_times[index]
@@ -276,7 +277,7 @@ class Scraper:
         current_location = 0
         part_num = 1
         expected_duration = convert_metadata.to_seconds(expected_time)
-        chapter_seconds.append(expected_duration)
+        self.chapter_seconds.append(expected_duration)
 
         # Main loop for walking through book
         while True:
@@ -302,9 +303,13 @@ class Scraper:
 
             # Begin search for the absent part.
             lower_bound = int(loaded_duration)
-            upper_bound = int(min(loaded_duration + 30*60, expected_duration)) # 30 minutes
+            # Get the marker for the chapter AFTER the biggest duration. (This
+            # will be the end of the book if we go past that.)
+            upper_bound = self.chapter_seconds[1 + self.chapter_containing(loaded_duration + 60*60)]
+            int(min(loaded_duration + 60*60, expected_duration)) # an hour should be more than any part
             print(f"Missing part {part_num} between ({lower_bound}, {upper_bound}) sec")
             old_upper_bound = None
+            collapse_detected = False
             while not self.has_url(part_num):
                 current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
 
@@ -313,10 +318,13 @@ class Scraper:
                     # One last effort.
                     old_loc = current_location
                     span = upper_bound - lower_bound
+                    print(f"Using play toggle between {lower_bound}, {upper_bound} ({span}s), start at {current_location}")
                     try:
                         toggle_play.click()
-                        while not self.has_url(part_num) and old_loc+span > current_location:
+                        one_try = False
+                        while one_try or (not self.has_url(part_num) and old_loc+span > current_location):
                             time.sleep(1)
+                            one_try = True
                             current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
                     finally:
                         toggle_play.click()
@@ -326,16 +334,21 @@ class Scraper:
                     raise Exception(f"Need more precise search for {upper_bound - lower_bound}s range between {lower_bound}, {upper_bound}")
                 old_upper_bound = upper_bound
 
+                # Handle a "collapse" (lower==upper) by trying to search the whole book.
+                if not collapse_detected and lower_bound == upper_bound:
+                    upper_bound = self.chapter_seconds[-1]
+                    collapse_detected = True
+
                 # First, see if there's a chapter mark that divides our range.
-                desired_chapter = self.assess_chapter(chapter_seconds, upper_bound)
-                desired_chapter_start = chapter_seconds[desired_chapter]
-                current_chapter = self.assess_chapter(chapter_seconds, current_location)
-                current_chapter_start = chapter_seconds[current_chapter]
+                desired_chapter = self.chapter_containing(upper_bound)
+                desired_chapter_start = self.chapter_seconds[desired_chapter]
+                current_chapter = self.chapter_containing(current_location)
+                current_chapter_start = self.chapter_seconds[current_chapter]
                 if desired_chapter_start >= lower_bound and desired_chapter_start != current_location:
                     offset = current_location - current_chapter_start
                     low, high = sorted([current_chapter, desired_chapter])
                     span = desired_chapter_start - current_location
-                    print(f"Skipping from chapter {current_chapter} + {offset}s to {desired_chapter}, span {span}s. Chs: {chapter_seconds[low:high+1]}")
+                    print(f"Skipping from chapter {current_chapter} + {offset}s to {desired_chapter}, span {span}s. Chs: {self.chapter_seconds[low:high+1]}")
 
                     chapter_table_open.click()
                     time.sleep(1)
@@ -360,8 +373,8 @@ class Scraper:
                     current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
                     if current_location != desired_chapter_start:
                         # This is just a sanity check, caught some errors once though.
-                        current_chapter = self.assess_chapter(chapter_seconds, current_location)
-                        current_chapter_start = chapter_seconds[current_chapter]
+                        current_chapter = self.chapter_containing(current_location)
+                        current_chapter_start = self.chapter_seconds[current_chapter]
                         raise Exception(f"failed to find start of chapter {desired_chapter}, actually ch{current_chapter} + {current_location - current_chapter_start}")
                     # If there's an internal split, it gives us a new upper bound.
                     if lower_bound < current_location <= upper_bound:
