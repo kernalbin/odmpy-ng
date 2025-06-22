@@ -396,7 +396,7 @@ def convert_file(filename: str, total_duration: str):
         if chapters:
             chapters[-1]['end'] = total_seconds
 
-    output_data = abs_from_pylibby(input_data, ["PyLibbyNG"])
+    output_data = abs_from_pylibby(input_data, ["OdmpyNG"])
     if chapters:
         output_data['chapters'] = chapters
 
