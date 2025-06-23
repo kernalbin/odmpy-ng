@@ -348,7 +348,7 @@ class Scraper:
                     offset = current_location - current_chapter_start
                     low, high = sorted([current_chapter, desired_chapter])
                     span = desired_chapter_start - current_location
-                    print(f"Skipping from chapter {current_chapter} + {offset}s to {desired_chapter}, span {span}s. Chs: {self.chapter_seconds[low:high+1]}")
+                    print(f"Skipping from chapter {current_chapter} + {offset}s to {desired_chapter}/{len(self.chapter_seconds)-1}, span {span}s. Chs: {self.chapter_seconds[low:high+1]}")
 
                     chapter_table_open.click()
                     time.sleep(1)
