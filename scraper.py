@@ -238,9 +238,11 @@ class Scraper:
         time.sleep(1)
 
         chapter_markers = {}
-        chapter_title_elements = self.driver.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
-        chapter_time_elements = self.driver.find_elements(By.CLASS_NAME, 'place-phrase-visual')
 
+        chapter_dialog_table = self.driver.find_element(By.CLASS_NAME, 'chapter-dialog-table')
+
+        chapter_title_elements = chapter_dialog_table.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
+        chapter_time_elements = chapter_dialog_table.find_elements(By.CLASS_NAME, 'place-phrase-visual')
 
         chapter_times = []
 
@@ -371,6 +373,7 @@ class Scraper:
                         # Can get to the end of the audio with one more click.
                         chapter_next.click()
                         time.sleep(1)
+                        continue
 
                     current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
                     if current_location != desired_chapter_start:
