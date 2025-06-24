@@ -101,11 +101,9 @@ Example `config.json`:
 
 - [ ] Minimize bot-like behavior to reduce detection risk  
 - [x] Fully command-line compatible (partial support)  
-- [x] Batch download multiple books (testing)  
-- [ ] Fix occasional missing MP3 parts on long chapters  
-- [ ] Add loan renewal/return support  
-- [ ] Filter loans by media type  
-- [ ] Re-enable persistent cookies for session continuity  
+- [ ] Batch download multiple books  
+- [ ] Filter loans by media type
+- [ ] Support for branch libraries
 
 ---
 
