@@ -13,6 +13,7 @@ import convert_metadata
 import os
 import time
 import sys
+import json
 
 class Scraper:
     """Automated Overdrive audiobook downloader using Selenium."""
@@ -241,6 +242,8 @@ class Scraper:
         chapter_title_elements = self.driver.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
         chapter_time_elements = self.driver.find_elements(By.CLASS_NAME, 'place-phrase-visual')
 
+        mp3_urls = self.requests_to_mp3_files()
+        current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
 
         chapter_times = []
 
@@ -249,7 +252,10 @@ class Scraper:
                 chapter_times.append(elem.text)
                 self.chapter_seconds.append(convert_metadata.to_seconds(elem.text))
 
+        # The title.click() in here should take us to the beginning.
         for index, title in enumerate(chapter_title_elements):
+            if index == 0:
+                title.click()
             chapter_markers[title.text] = chapter_times[index]
         
         # Close chapter table
@@ -257,27 +263,54 @@ class Scraper:
         chapter_table_close.click()
         time.sleep(1)
 
-        print("Got chapters")
+        print(f"Got {len(chapter_times)} chapters")
 
-        # Go to beginning of book timeline
-        while chapter_previous.is_enabled():
+        # If we were already in chapter 0 but at some offset, this might be
+        # needed.
+        if chapter_previous.is_enabled():
             chapter_previous.click()
-            time.sleep(.1)
         time.sleep(1)
 
         expected_time = timeline_length.get_attribute("textContent").replace("-", "")
         print(f"Final book should be ~{expected_time} in length.")
 
+        expected_duration = convert_metadata.to_seconds(expected_time)
+        self.chapter_seconds.append(expected_duration)
+
+        print("Getting chapter:part structure.")
+
+        # Initialize part 1 always in chapter 0.
+        parts_at = {0:[1]}
+        seen_parts = {1}
+
+        # Initialize the parts_at structure with the chapter the ereader
+        # started up in.
+        ch = self.chapter_containing(current_location)
+        parts_at[ch] = sorted(set(int(k) for k in mp3_urls.keys()) - seen_parts)
+        seen_parts.update(parts_at[ch])
+        print(parts_at)
+
+        # Partition the book by skimming through chapters and observing known parts.
+        for ch, offset in enumerate(self.chapter_seconds[:-1]):
+            if parts_at.get(ch) is None:
+                parts_at[ch] = sorted(set(int(k) for k in self.requests_to_mp3_files()) - seen_parts)
+                seen_parts.update(parts_at[ch])
+            if chapter_next.is_enabled():
+                chapter_next.click()
+            else:
+                # My brain is SO broken by the fact that this always happens. I
+                # simply have no explanation for it.
+                print(f"failed advancing after loading chapter {ch}")
+            time.sleep(1)
+        print(parts_at)
+        print("Loaded chapter:part structure, inverting:")
+        sys.exit(0)
 
         # Download part files
         print("Getting files")
-
-        mp3_urls = self.requests_to_mp3_files()
+        current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
         loaded_duration = 0
-        current_location = 0
         part_num = 1
-        expected_duration = convert_metadata.to_seconds(expected_time)
-        self.chapter_seconds.append(expected_duration)
 
         # Main loop for walking through book
         while True:
