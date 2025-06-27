@@ -2,6 +2,7 @@
 ODMPY-NG: OverDrive audiobook download and conversion tool
 """
 
+import argparse
 import json
 import os
 import string
@@ -62,15 +63,20 @@ def get_book_by_index(index: int, books: list):
     return next((b for b in books if b["index"] == index), None)
 
 def main():
-
     print("Starting ODMPY-NG")
 
-    if len(sys.argv) < 2:
-        print("Error: Config file path is required")
-        print("Usage: python interactive.py <config_file_path>")
+    # Command line parsing
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_file", type=str, help="Path to config file")
+    parser.add_argument("--id", "-i", type=int, help="Libby ID for a single book to download")
+    parser.add_argument("--library", "-L", type=int, help="Index of library within config to download from")
+    args = parser.parse_args()
+
+    if not os.path.exists(args.config_file):
+        print(f"Error: Config file '{args.config_file}' not found")
         sys.exit(1)
 
-    config_file = sys.argv[1]
+    config_file = args.config_file
     try:
         with open(config_file) as f:
             config = json.load(f)
@@ -106,6 +112,8 @@ def main():
     if len(libraries) == 1:
         # Only one library, automatically select it
         library_index = 0
+    elif args.library is not None:
+        library_index = args.library
     else:
         # Let user select which library to use
         library_index = int(input("\nSelect a library to use: "))
@@ -120,11 +128,11 @@ def main():
         "library": selected_library["url"],
         "user": selected_library["card_number"],
         "pass": selected_library["pin"],
-        "download-dir": '/downloads'
+        "download-dir": '/downloads',
+        "id": args.id
     }
         
     print(f"Using library: {selected_library['name']}")
-
 
     scraper = Scraper(scraper_config)
     cookies = scraper.ensure_login(cookies)
@@ -140,11 +148,21 @@ def main():
     books = scraper.get_loans() # [{"index": 0, "title": "", "author": "", "link": "", "id": 0}]
 
     # Print loans for selection by user
-    for book in books:
-        print(f"{book['index']}: {book['title']} - {book['author']}")
+    title_selections = []
 
-    selections_input = input("Select a title to download (e.g., 0,1,2-3): ")
-    title_selections = parse_book_selection_input(selections_input, books)
+    find_id = str(scraper_config["id"]) if scraper_config["id"] else ''
+    for book in books:
+        this_one = False
+        if book["id"] == find_id:
+            title_selections.append(book["index"])
+            this_one = True
+
+        visible_marker = "->" if this_one else "  "
+        print(f"{visible_marker} {book['index']}: {book['title']} - {book['author']} ({book['id']})")
+
+    if not title_selections:
+        selections_input = input("Select a title to download (e.g., 0,1,2-3): ")
+        title_selections = parse_book_selection_input(selections_input, books)
 
     # For each selected book, get the data
     for title_index in title_selections:
