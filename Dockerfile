@@ -18,8 +18,7 @@ RUN apt-get update && \
     pip3 install --upgrade pip && \
     pip3 install --no-cache-dir -r requirements.txt
 
-# Copy python scripts and entrypoint
-COPY *.py ./
+# Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
 
 # Make entrypoint executable

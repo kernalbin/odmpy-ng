@@ -1,3 +1,4 @@
+from typing import Tuple
 from seleniumwire import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
@@ -9,11 +10,11 @@ from selenium.common.exceptions import ElementClickInterceptedException
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
 import overdrive_download
+from convert_metadata import to_hms
 import convert_metadata
 import os
 import time
 import sys
-import json
 
 class Scraper:
     """Automated Overdrive audiobook downloader using Selenium."""
@@ -206,6 +207,41 @@ class Scraper:
             return minutes * 60
         return False
 
+    def closest_chapter_mark(self, lower_bound: int, upper_bound: int, current_location: int) -> Tuple[Tuple[int, int]|None, int]:
+        """
+            Finds the closest chapter mark to reach into the range near the lower bound.
+
+            Args:
+                lower_bound (int): Lower bound of the chapter marks.
+                upper_bound (int): Upper bound of the chapter marks.
+                current_location (int): Current location in the book.
+        """
+        current_chapter = self.chapter_containing(current_location)
+        earliest_chapter = self.chapter_containing(lower_bound)
+        mid_chapter = self.chapter_containing(lower_bound) + 1
+        ending_chapter = self.chapter_containing(upper_bound) + 1
+        # Best case: there's an easy chapter mark cutting the range in half.
+        if current_chapter < mid_chapter < ending_chapter:
+            return (mid_chapter, self.chapter_seconds[mid_chapter]), current_chapter
+        # No easy chapter mark. We will assess three distances:
+        # 1. Earliest chapter start to lower bound
+        earliest_chapter_start = self.chapter_seconds[earliest_chapter]
+        earliest_distance = abs(lower_bound - earliest_chapter_start)
+
+        # 2. Ending chapter start to lower bound
+        ending_chapter_start = self.chapter_seconds[ending_chapter]
+        ending_distance = abs(lower_bound - ending_chapter_start)
+
+        # 3. Current location to lower bound
+        current_distance = abs(lower_bound - current_location)
+        # Simple but sad case: no chapter jump will help.
+        if current_distance <= earliest_distance and current_distance <= ending_distance:
+            return None, current_chapter
+
+        # Otherwise, choose the chapter that's closest to the lower bound.
+        desired_chapter = earliest_chapter if earliest_distance <= ending_distance else ending_chapter
+        return (desired_chapter, self.chapter_seconds[desired_chapter]), current_chapter
+
     def get_book(self, selected_title_link: str, download_path: str):
         """
         Downloads the selected audiobook and associated metadata.
@@ -255,7 +291,6 @@ class Scraper:
                 chapter_times.append(elem.text)
                 self.chapter_seconds.append(convert_metadata.to_seconds(elem.text))
 
-        # The title.click() in here should take us to the beginning.
         for index, title in enumerate(chapter_title_elements):
             if index == 0:
                 title.click()
@@ -267,12 +302,6 @@ class Scraper:
         time.sleep(1)
 
         print(f"Got {len(chapter_times)} chapters")
-
-        # If we were already in chapter 0 but at some offset, this might be
-        # needed.
-        if chapter_previous.is_enabled():
-            chapter_previous.click()
-        time.sleep(1)
 
         expected_time = timeline_length.get_attribute("textContent").replace("-", "")
         print(f"Final book should be ~{expected_time} in length.")
@@ -296,33 +325,84 @@ class Scraper:
 
         # Partition the book by skimming through chapters and observing known parts.
         print("Building structure chapter:part -", end='')
-        for ch, offset in enumerate(self.chapter_seconds[:-1]):
+        needs_end = True
+        for ch, location in enumerate(self.chapter_seconds):
             parts = set(int(k) for k in self.requests_to_mp3_files()) - seen_parts
             if chapter_to_part.get(ch) is None and parts:
                 chapter_to_part[ch] = min(parts)
-                print(f" {ch}:{chapter_to_part[ch]}", end='', flush=True)
+                print(f" {ch}:{chapter_to_part[ch]}({to_hms(location)}s)", end='', flush=True)
             seen_parts.update(parts)
             if chapter_next.is_enabled():
                 chapter_next.click()
                 time.sleep(0.5)
-        print(".")
+            else:
+                p = max(seen_parts) if seen_parts else None
+                current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+                print(f".\nFound end of book at end of chapter {ch}, part {p}, at {to_hms(current_location)}")
+                needs_end = False
 
-        # Build a complete table of upper bounds.
+        skips_at_end = 0
+        if needs_end:
+            print(f"...\nDid not find end, at {to_hms(current_location)}")
+            skips = 0
+            old_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+            while chapter_next.is_enabled():
+                chapter_next.click()
+                time.sleep(0.5)
+                skips += 1
+            current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+            parts = set(int(k) for k in self.requests_to_mp3_files()) - seen_parts
+            if skips or parts:
+                severity = "WARNING"
+                if parts:
+                    skips_at_end = skips
+                    severity = "ERROR"
+                print(f"{severity}: {skips} chapters and parts {parts} NOT IN TABLE OF CONTENTS, from {to_hms(old_location)} to {to_hms(current_location)} (diff {to_hms(current_location - old_location)})")
+
+        # Build a complete table of upper bounds; given each part, what chapter
+        # is its upper bound (i.e. the place where the NEXT part was first
+        # seen).
         last_seen = 0
-        part_to_chapter = {chapter_to_part[0]:0}
+        part_to_chapter = {chapter_to_part[0]:1}
         for ch, part in sorted(chapter_to_part.items())[1:]:
             for intermediate_pt in range(last_seen+1, part):
                 part_to_chapter[intermediate_pt] = ch - 1
             last_seen = part
             part_to_chapter[part] = ch
 
-        print("Table of contents part:chapter - ", part_to_chapter)
-
         # Download part files
         print("Getting files")
         current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
-        loaded_duration = 0
+        loaded_duration = convert_metadata.get_total_duration(download_path)
         part_num = 1
+
+        # Check for resumable part files.
+        print("Checking for resumable parts.")
+        tmp_dir = download_path
+        if loaded_duration:
+            parts = [f"part{part_num:02d}.mp3" for part_num in range(1, max(part_to_chapter)+1)]
+
+            # Check that the dir contains sequential part files.
+            resumable_parts = [part for part in parts if os.path.isfile(os.path.join(tmp_dir, part))]
+            if not resumable_parts or resumable_parts != parts[:len(resumable_parts)]:
+                print(f"ERROR: tmp folder contains corrupted download (check numbered parts), please remove or clean up: {tmp_dir}")
+                print(resumable_parts)
+                sys.exit(1)
+            resumable_parts = [fullname for part in parts if os.path.isfile(fullname := os.path.join(tmp_dir, part))]
+
+            # Sum the durations of the resumable parts.
+            exact_size = 0.0
+            for _, fullname in enumerate(resumable_parts, 1):
+                this_size = convert_metadata.get_mp3_duration(fullname)
+                exact_size += this_size
+
+            # Check that the dir doesn't have any other media files (duration
+            # range accounts for inexactness).
+            if not loaded_duration - 10 < exact_size < loaded_duration + 10:
+                print(f"ERROR: tmp folder contains {to_hms(loaded_duration)} duration media files when expected {to_hms(int(exact_size))}, please remove or clean up: {tmp_dir}")
+                sys.exit(1)
+            part_num = len(resumable_parts) + 1
+            print(f"Resuming download from {part_num} part(s) at {to_hms(loaded_duration)}")
 
         # Main loop for walking through book
         while True:
@@ -331,11 +411,12 @@ class Scraper:
             mp3_urls = self.requests_to_mp3_files()
             url = mp3_urls.get(f"{part_num:02d}")
             if url:
-                length = overdrive_download.download_mp3_part(url, f"{part_num:02d}", download_path, self.get_cookies())
+                length = overdrive_download.download_mp3_part(url, part_num, download_path, self.get_cookies())
                 # If valid download, add the length of the part to the total, check progress through whole book
                 if length:
-                    loaded_duration += length
-                    print(f"{loaded_duration:.2f}/{expected_duration:.2f} sec  -  {loaded_duration/expected_duration*100:.2f}%")
+                    # Use ground truth from metadata rather than adding approximations
+                    loaded_duration = convert_metadata.get_total_duration(download_path)
+                    print(f"{to_hms(loaded_duration)} / {to_hms(expected_duration)} - {loaded_duration}/{expected_duration} sec  -  {loaded_duration/expected_duration*100.0:.2f}%")
                     if loaded_duration >= expected_duration-1:
                         print("Downloaded complete audio")
                         print(f"Book contained {part_num} part(s)")
@@ -353,6 +434,12 @@ class Scraper:
                 upper_bound = self.chapter_seconds[1 + part_to_chapter[part_num]]
             else:
                 upper_bound = expected_duration
+            # Clip the upper bound to a maximum of 3 hours, should be longer
+            # than any reasonable part length. The algorithm will "collapse"
+            # upper and lower bounds if that isn't true, we'll detect that
+            # later.
+            if upper_bound - lower_bound > 3*60*60:
+                upper_bound = lower_bound + 3*60*60
 
             print(f"Missing part {part_num} between ({lower_bound}, {upper_bound}) sec")
             old_upper_bound = None
@@ -387,16 +474,13 @@ class Scraper:
                     upper_bound = self.chapter_seconds[-1]
                     collapse_detected = True
 
-                # First, see if there's a chapter mark that divides our range.
-                desired_chapter = self.chapter_containing(upper_bound)
-                desired_chapter_start = self.chapter_seconds[desired_chapter]
-                current_chapter = self.chapter_containing(current_location)
-                current_chapter_start = self.chapter_seconds[current_chapter]
-                if desired_chapter_start >= lower_bound and desired_chapter_start != current_location:
-                    offset = current_location - current_chapter_start
-                    low, high = sorted([current_chapter, desired_chapter])
+                # First, see if there's a chapter mark that is closer to our
+                # range than the current location.
+                chapter_move, current_chapter = self.closest_chapter_mark(lower_bound, upper_bound, current_location)
+                if chapter_move:
+                    desired_chapter, desired_chapter_start = chapter_move
                     span = desired_chapter_start - current_location
-                    print(f"Skipping from chapter {current_chapter} + {offset}s to {desired_chapter}/{len(self.chapter_seconds)-1}, span {span}s. Chs: {self.chapter_seconds[low:high+1]}")
+                    print(f"Skipping from chapter {current_chapter} to {desired_chapter}/{len(self.chapter_seconds)-1}, span {span}s.")
 
                     chapter_table_open.click()
                     time.sleep(1)
@@ -419,22 +503,30 @@ class Scraper:
                     current_chapter = self.chapter_containing(current_location)
                     current_chapter_start = self.chapter_seconds[current_chapter]
 
-                    if upper_bound == expected_duration:
-                        # Can get to the end of the audio with one more click.
-                        chapter_next.click()
-                        time.sleep(1)
-                    elif current_chapter == desired_chapter and current_chapter_start != current_location:
-                        # This seems to be the result of navigating away from a chapter.
+                    # Sometimes the player dumps us in the middle of a chapter, so go back if optimal.
+                    if current_location > current_chapter_start:
+                        print(f"Player dumped us in the middle of a chapter, going back {current_location-current_chapter_start}s.")
                         chapter_previous.click()
                         time.sleep(1)
-                    current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+                        current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+                    # If there's slop at the end with chapter skips, explore it.
+                    if chapter_next.is_enabled() and lower_bound <= current_location <= upper_bound and skips_at_end:
+                        while current_location < lower_bound and chapter_next.is_enabled():
+                            chapter_next.click()
+                            time.sleep(1)
+                            current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+                        skips_at_end = False
 
-                    # If there's an internal split, it gives us a new upper bound.
-                    if not self.has_url(part_num) and lower_bound < current_location <= upper_bound:
-                        print(f"No URL for {part_num} at {upper_bound}, reducing to {current_location-1}.")
-                        upper_bound = current_location - 1
-                if self.has_url(part_num):
-                    continue
+                    if self.has_url(part_num):
+                        continue
+                    elif lower_bound <= current_location < upper_bound:
+                        # Check for a possibly fuzzy lower_bound, mp3 sometimes is a few seconds off.
+                        if lower_bound <= current_location <= lower_bound + 15:
+                            lower_bound = current_location + 1
+                        else:
+                            # If there's an internal split, it gives us a new upper bound.
+                            print(f"No URL for {part_num} at {current_location}, reducing to {current_location-1}.")
+                            upper_bound = current_location - 1
                 # Next, try to use the minute-skip key to get into the range.
                 body = self.driver.find_element(By.TAG_NAME, "body")
                 old_location = current_location

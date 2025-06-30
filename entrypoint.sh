@@ -26,7 +26,6 @@ fi
 # Fix permissions
 mkdir -p /downloads
 chown $HOST_UID:$HOST_GID /downloads
-chown -R $HOST_UID:$HOST_GID /app
 
 # Drop privileges
 exec gosu "$username" python3 interactive.py /config/config.json "$@"
