@@ -2,6 +2,7 @@
 ODMPY-NG: OverDrive audiobook download and conversion tool
 """
 
+import argparse
 import json
 import os
 import string
@@ -62,15 +63,21 @@ def get_book_by_index(index: int, books: list):
     return next((b for b in books if b["index"] == index), None)
 
 def main():
-
     print("Starting ODMPY-NG")
 
-    if len(sys.argv) < 2:
-        print("Error: Config file path is required")
-        print("Usage: python interactive.py <config_file_path>")
+    # Command line parsing
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config_file", type=str, help="Path to config file")
+    parser.add_argument("--id", "-i", type=int, help="Libby ID for a single book to download")
+    parser.add_argument("--library", "-L", type=int, help="Index of library within config to download from")
+    parser.add_argument("--retry", "-r", action="store_true", help="Allow retry of stopped downloads (if left in tmp dir)")
+    args = parser.parse_args()
+
+    if not os.path.exists(args.config_file):
+        print(f"Error: Config file '{args.config_file}' not found")
         sys.exit(1)
 
-    config_file = sys.argv[1]
+    config_file = args.config_file
     try:
         with open(config_file) as f:
             config = json.load(f)
@@ -81,10 +88,16 @@ def main():
         print(f"Error: Config file '{config_file}' is not valid JSON")
         sys.exit(1)    
 
+    config_dir = os.path.dirname(config_file)
+    if not os.path.exists(config_dir):
+        print(f"Error: Config directory '{config_dir}' not found")
+        sys.exit(1)
+
     cookies = []
-    if os.path.exists("cookies"):
+    cookie_file = os.path.join(config_dir, "cookies")
+    if os.path.exists(cookie_file):
         try:
-            with open("cookies") as f:
+            with open(cookie_file) as f:
                 cookies = json.load(f)
         except Exception as e:
             print(f"Error loading cookies: {e}")
@@ -101,11 +114,17 @@ def main():
 
     print("\nAvailable libraries:")
     for i, library in enumerate(libraries):
-        print(f"{i}: {library['name']} - {library['url']}")
+        if args.library is not None:
+            visible_marker = " -> " if i == args.library else "    "
+        else:
+            visible_marker = f"{i:>3}:"
+        print(f"{visible_marker} {library['name']} - {library['url']}")
 
     if len(libraries) == 1:
         # Only one library, automatically select it
         library_index = 0
+    elif args.library is not None:
+        library_index = args.library
     else:
         # Let user select which library to use
         library_index = int(input("\nSelect a library to use: "))
@@ -120,11 +139,14 @@ def main():
         "library": selected_library["url"],
         "user": selected_library["card_number"],
         "pass": selected_library["pin"],
-        "download-dir": '/downloads'
+        "download-dir": '/downloads', # NOTE: not actually accessed by the scraper, only here!!!
+        "tmp-dir": None, # to be filled in later
+        "allow-retry": args.retry,
+        "id": args.id,
     }
+    os.makedirs(scraper_config["download-dir"], mode=0o755, exist_ok=True)
         
     print(f"Using library: {selected_library['name']}")
-
 
     scraper = Scraper(scraper_config)
     cookies = scraper.ensure_login(cookies)
@@ -133,27 +155,44 @@ def main():
         print("Sign in failed")
         sys.exit(1)
 
-    with open("cookies", "w") as f:
+    with open(cookie_file, "w") as f:
         json.dump(cookies, f, indent=4)
 
     # Collect list of loans
     books = scraper.get_loans() # [{"index": 0, "title": "", "author": "", "link": "", "id": 0}]
 
     # Print loans for selection by user
-    for book in books:
-        print(f"{book['index']}: {book['title']} - {book['author']}")
+    title_selections = []
 
-    selections_input = input("Select a title to download (e.g., 0,1,2-3): ")
-    title_selections = parse_book_selection_input(selections_input, books)
+    find_id = str(scraper_config["id"]) if scraper_config["id"] else ''
+    for book in books:
+        this_one = False
+        if book["id"] == find_id:
+            title_selections.append(book["index"])
+            this_one = True
+
+        visible_marker = "->" if this_one else "  "
+        print(f"{visible_marker} {book['index']}: {book['title']} - {book['author']} ({book['id']})")
+
+    if not title_selections:
+        selections_input = input("Select a title to download (e.g., 0,1,2-3): ")
+        title_selections = parse_book_selection_input(selections_input, books)
 
     # For each selected book, get the data
     for title_index in title_selections:
-        # Create tmp directory with absolute path
-        tmp_dir = os.path.abspath(os.path.join(os.getcwd(), "tmp"))
-        os.makedirs(tmp_dir, mode=0o755, exist_ok=True)
-
         # Get book selection from index
         book_selection = get_book_by_index(title_index, books)
+        if not book_selection:
+            print(f"ERROR: Invalid book selection, should not happen: {title_index}")
+            continue
+
+        # Create tmp directory with absolute path, one for each book.
+        tmp_dir = os.path.abspath(os.path.join(scraper_config["download-dir"], "tmp", book_selection["id"]))
+        scraper_config["tmp-dir"] = tmp_dir
+        if os.path.exists(tmp_dir) and not scraper_config.get("allow-retry"):
+            shutil.rmtree(tmp_dir)
+        os.makedirs(tmp_dir, mode=0o755, exist_ok=True)
+
         print(f"Accessing {book_selection['title']}, ID: {book_selection['id']}")
 
         # Use scraper.py to download book
@@ -222,12 +261,13 @@ def main():
             
             if file_conversions.encode_metadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
                 print("Finished file created")
-                # Clean up temporary files
-                try:
-                    shutil.rmtree(tmp_dir)
-                    print("Temporary files cleaned up")
-                except Exception as e:
-                    print(f"Warning: Could not remove temporary directory: {e}")
+
+        # Clean up temporary files
+        try:
+            shutil.rmtree(tmp_dir)
+            print("Temporary files cleaned up")
+        except Exception as e:
+            print(f"Warning: Could not remove temporary directory: {e}")
 
     del scraper
 
