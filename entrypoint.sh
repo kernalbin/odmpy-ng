@@ -28,5 +28,6 @@ mkdir -p /downloads
 chown $HOST_UID:$HOST_GID /downloads
 
 # Drop privileges
+echo Will run as $username
 exec gosu "$username" python3 interactive.py /config/config.json "$@"
 

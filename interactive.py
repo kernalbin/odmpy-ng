@@ -69,8 +69,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", type=str, help="Path to config file")
     parser.add_argument("--id", "-i", type=int, help="Libby ID for a single book to download")
-    parser.add_argument("--library", "-L", type=int, help="Index of library within config to download from")
     parser.add_argument("--retry", "-r", action="store_true", help="Allow retry of stopped downloads (if left in tmp dir)")
+    parser.add_argument("--name-dir", "-n", type=str, help="Fixed subdirectory relative to /downloads to move single downloaded book to")
+    # These two are mutually exclusive
+    exclusive_group = parser.add_mutually_exclusive_group(required=False)
+    exclusive_group.add_argument("--library", "-L", type=int, help="Index of library within config to download from")
+    exclusive_group.add_argument("--site-id", "-s", type=int, help="Site-Id assigned in config to library to download from")
     args = parser.parse_args()
 
     if not os.path.exists(args.config_file):
@@ -112,24 +116,48 @@ def main():
         print("No libraries found, did you create a valid config file?")
         sys.exit(1)
 
+    # Enforce unique site-ids in libraries (except None is fine)
+    site_ids = [s for library in libraries if (s := library.get("site-id")) is not None]
+    if len(site_ids) != len(set(site_ids)):
+        print(f"Error: site-ids must be unique within libraries, please edit {config_file}")
+        sys.exit(1)
+
+    library_index = None
     print("\nAvailable libraries:")
     for i, library in enumerate(libraries):
+        visible_marker = "    "
         if args.library is not None:
-            visible_marker = " -> " if i == args.library else "    "
+            if i == args.library:
+                visible_marker = " -> "
+                library_index = i
+        elif args.site_id is not None:
+            if library.get("site-id") == args.site_id:
+                visible_marker = " -> "
+                library_index = i
         else:
             visible_marker = f"{i:>3}:"
         print(f"{visible_marker} {library['name']} - {library['url']}")
 
+    if library_index is None and args.library is not None:
+        print(f"Error: Library {args.library} not found in config")
+        sys.exit(1)
+    if library_index is None and args.site_id is not None:
+        print(f"Error: Library matching site-id {args.site_id} not found in config")
+        sys.exit(1)
+
     if len(libraries) == 1:
         # Only one library, automatically select it
         library_index = 0
-    elif args.library is not None:
-        library_index = args.library
-    else:
+    elif library_index is None:
         # Let user select which library to use
-        library_index = int(input("\nSelect a library to use: "))
-        
-    if library_index < 0 or library_index >= len(libraries):
+        library_text = input("\nSelect a library to use: ")
+        if not library_text:
+            sys.exit(0) # Easy polite exit
+        elif not library_text.isdigit():
+            library_index = None
+        library_index = int(library_text)
+ 
+    if library_index is None or library_index < 0 or library_index >= len(libraries):
         print("Invalid library selection")
         sys.exit(1)
         
@@ -178,6 +206,10 @@ def main():
         selections_input = input("Select a title to download (e.g., 0,1,2-3): ")
         title_selections = parse_book_selection_input(selections_input, books)
 
+    if args.name_dir and len(title_selections) > 1:
+        print("ERROR: Cannot use --name-dir with multiple books")
+        sys.exit(1)
+
     # For each selected book, get the data
     for title_index in title_selections:
         # Get book selection from index
@@ -196,7 +228,7 @@ def main():
         print(f"Accessing {book_selection['title']}, ID: {book_selection['id']}")
 
         # Use scraper.py to download book
-        book_data = scraper.get_book(book_selection["link"], tmp_dir) # (chapter_markers, expected_time)
+        book_data = scraper.get_book(book_selection["link"], tmp_dir)
 
         if not book_data:
             print("Failed to download")
@@ -210,13 +242,16 @@ def main():
         # Save current cookies for upcoming downloads
         cookies = scraper.get_cookies()
 
-        # Filter to remove punctuation from book title/author for file path
-        filter_table = str.maketrans(dict.fromkeys(string.punctuation))
-        download_path = os.path.abspath(os.path.join(
-            scraper_config["download-dir"], 
-            book_author.translate(filter_table), 
-            book_title.translate(filter_table)
-        ))
+        if args.name_dir:
+            download_path = os.path.abspath(os.path.join(scraper_config["download-dir"], args.name_dir))
+        else:
+            # Filter to remove punctuation from book title/author for file path
+            filter_table = str.maketrans(dict.fromkeys(string.punctuation))
+            download_path = os.path.abspath(os.path.join(
+                scraper_config["download-dir"], 
+                book_author.translate(filter_table), 
+                book_title.translate(filter_table)
+            ))
 
         os.makedirs(download_path, exist_ok=True)
 
