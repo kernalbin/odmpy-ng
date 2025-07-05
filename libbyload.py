@@ -6,6 +6,7 @@ import argparse
 import subprocess
 import shutil
 
+from atomicwrites import atomic_write
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -26,6 +27,30 @@ def load_libby():
     with open(libby_loc, 'r') as f:
         data = json.load(f)
     return data
+
+def making_progress(base: Path, book: Book, verbose: bool = False) -> bool:
+    progress = False
+    path = base / 'tmp' / str(book.ID)
+    if not path.is_dir():
+        return True
+    older_files = []
+    older = path/'older.files'
+    if older.is_file():
+        with older.open('r') as f:
+            for line in f:
+                older_files.append(line.strip())
+    if verbose:
+        print(f"Checking {book.title} for progress:")
+    for f in os.listdir(base / 'tmp' / str(book.ID)):
+        if not f.endswith('.mp3') or f in older_files:
+            continue
+        if verbose:
+            print(f"  {f}")
+            older_files.append(f)
+        progress = True
+    with atomic_write(older, overwrite=True) as f:
+        f.write('\n'.join(older_files))
+    return progress
 
 def main():
     global libby_loc
@@ -98,13 +123,27 @@ def main():
         sys.exit(res.returncode)
 
     for book in unrecorded:
+        tmp_folder = download_base / 'tmp' / book.ID
+        if (tmp_folder / 'bad').is_file():
+            print(f"Skipping book due to 'bad' flag (delete to retry): {book.title}: {tmp_folder / 'bad'}")
+            continue
         print(f"Running odmpy-ng for book: {book.title}")
-        res = subprocess.call(f"docker compose run --rm odmpy-ng -s={book.site_id} -i={book.ID} -n=libby/{book.ID} -r",
-                              shell=True, env=env)
-
-        if res != 0:
-            print(f"Error running odmpy libby for book {book.ID} / {book.title}: {res}")
-            sys.exit(1)
+        res = -1
+        try:
+            # Using try/finally to handle things like ctrl-c.
+            res = subprocess.call(f"docker compose run --rm odmpy-ng -s={book.site_id} -i={book.ID} -n=libby/{book.ID} -r",
+                                shell=True, env=env)
+            if not making_progress(download_base, book):
+                res = -1
+        finally:
+            if res != 0:
+                print(f"Error running odmpy libby for book {book.ID}, {book.title}: {res}")
+                # Scan for leftover files in tmp folder...
+                if os.path.exists(tmp_folder):
+                    if not making_progress(download_base, book, verbose=True):
+                        print("Marking tmp folder as bad, no progress.")
+                        (tmp_folder / 'bad').touch()
+                sys.exit(1)
 
 if __name__ == '__main__':
     main()
