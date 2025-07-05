@@ -1,5 +1,6 @@
 # Use selenium's standalone chrome image (includes Chrome+WebDriver)
-FROM selenium/standalone-chrome:latest
+# Pinned to specific Selenium version, no specific version of Chrome
+FROM selenium/standalone-chrome:96.0-20250707
 
 # Switch to root to install dependencies
 USER root
@@ -29,6 +30,7 @@ ENV PYTHONWARNINGS="ignore:pkg_resources is deprecated as an API"
 
 # command to run the app (will accept arguments)
 ENTRYPOINT ["/entrypoint.sh"]
-# default arguments to pass to the entrypoint
+# Default is interactive menus.
+# Alternately, --idle will run the permissions fixing, then just wait for docker exec to run the app.
 CMD []
 

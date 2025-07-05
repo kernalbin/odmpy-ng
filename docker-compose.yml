@@ -1,0 +1,17 @@
+services:
+  odmpy-ng:
+    image: odmpy-ng:dev
+    build:
+      context: .
+    environment:
+      HOST_UID: ${HOST_UID}
+      HOST_GID: ${HOST_GID}
+      DOWNLOAD_BASE: ${DOWNLOAD_BASE}
+    volumes:
+      - ./config:/config
+      - ${DOWNLOAD_BASE}:/downloads
+      - ./:/app:ro
+    entrypoint: ["/entrypoint.sh"]
+    command: []
+    restart: no
+

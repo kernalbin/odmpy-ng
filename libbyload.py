@@ -80,12 +80,28 @@ def main():
     UID = os.getuid()
     GID = os.getgid()
 
+    env = os.environ.copy()
+    env["HOST_UID"] = str(UID)
+    env["HOST_GID"] = str(GID)
+    env["DOWNLOAD_BASE"] = str(download_base)
+    env["COMPOSE_BAKE"] = "true"
+
+    res = subprocess.run(["docker", "compose", "build"],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         text=True,
+                         env=env)
+    # Check for failure
+    if res.returncode != 0:
+        print("Build failed. Dumping build output...\n", file=sys.stderr)
+        print(res.stdout)
+        print(res.stderr, file=sys.stderr)
+        sys.exit(res.returncode)
+
     for book in unrecorded:
-        print(f"Running odmpy-ng for book '{book.title}'")
-        res = subprocess.call(f"docker run --rm -e HOST_UID={UID} -e HOST_GID={GID} "
-                             f"-v ./config:/config -v {download_base}:/downloads -v {os.getcwd()}:/app:ro "
-                             f"odmpy-ng -s={book.site_id} -i={book.ID} -n=libby/{book.ID}",
-                             shell=True)
+        print(f"Running odmpy-ng for book: {book.title}")
+        res = subprocess.call(f"docker compose run --rm odmpy-ng -s={book.site_id} -i={book.ID} -n=libby/{book.ID} -r",
+                              shell=True, env=env)
+
         if res != 0:
             print(f"Error running odmpy libby for book {book.ID} / {book.title}: {res}")
             sys.exit(1)
