@@ -2,17 +2,18 @@ import requests
 import os
 import json
 import convert_metadata
+from atomicwrites import atomic_write
 
 # Standard headers for web requests to mimic a browser
 headers = {'User-Agent': 'Mozilla/5.0'}
 
-def download_mp3_part(url, part_id, download_path: str, cookies: list) -> int:
+def download_mp3_part(url, part_num, download_path: str, cookies: list) -> int:
     """
     Downloads an MP3 part from the given URL and saves it to the specified path.
     
     Args:
         url (str): The URL of the MP3 part.
-        part_id (int): The part number, used to name the file.
+        part_num (int): The part number, used to name the file.
         download_path (str): Directory where the MP3 will be saved.
         cookies (list): List of cookies (dicts) for authentication.
     
@@ -22,14 +23,15 @@ def download_mp3_part(url, part_id, download_path: str, cookies: list) -> int:
     os.makedirs(download_path, exist_ok=True)
     cookie_dict = {cookie['name']: cookie['value'] for cookie in cookies}
 
-    print("Downloading part " + str(int(part_id)))
+    print(f"Downloading part {part_num}")
     response = requests.get(url, headers=headers, cookies=cookie_dict, stream=True)
 
+    fn = f"part{part_num:02d}.mp3"
     if response.status_code == 200:
-        with open(os.path.join(download_path, f"part{part_id}.mp3"), "wb") as f:
+        with atomic_write(os.path.join(download_path, fn), mode="wb", overwrite=True) as f:
             for chunk in response.iter_content(1024):
                 f.write(chunk)
-        return convert_metadata.get_mp3_duration(os.path.join(download_path, f"part{part_id}.mp3"))
+        return convert_metadata.get_mp3_duration(os.path.join(download_path, fn))
     else:
         print(f"Failed to download mp3 part with status code {response.status_code}")
         return 0
