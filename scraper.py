@@ -315,8 +315,7 @@ class Scraper:
         chapter_to_part = {0:1}
         seen_parts = {1}
 
-        # Initialize the chapter_to_part structure with the chapter the ereader
-        # started up in.
+        # Add the chapter the ereader started up in.
         ch = self.chapter_containing(current_location)
         parts = set(int(k) for k in mp3_urls.keys()) - seen_parts
         if parts:
@@ -324,28 +323,31 @@ class Scraper:
         seen_parts.update(parts)
 
         # Partition the book by skimming through chapters and observing known parts.
-        print("Building structure chapter:part -", end='')
+        print(f"Building structure chapter:part ({len(self.chapter_seconds)} chapters):", end='')
         needs_end = True
-        for ch, location in enumerate(self.chapter_seconds):
+        for ch in range(len(self.chapter_seconds)):
+            print(f" {ch}", end='', flush=True)
             parts = set(int(k) for k in self.requests_to_mp3_files()) - seen_parts
             if chapter_to_part.get(ch) is None and parts:
                 chapter_to_part[ch] = min(parts)
-                print(f" {ch}:{chapter_to_part[ch]}({to_hms(location)}s)", end='', flush=True)
             seen_parts.update(parts)
             if chapter_next.is_enabled():
                 chapter_next.click()
                 time.sleep(0.5)
             else:
-                p = max(seen_parts) if seen_parts else None
-                current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
-                print(f".\nFound end of book at end of chapter {ch}, part {p}, at {to_hms(current_location)}")
                 needs_end = False
+        print() # finish the above progress bar.
 
-        skips_at_end = 0
-        if needs_end:
-            print(f"...\nDid not find end, at {to_hms(current_location)}")
+        # Find the end of the book, including any trailing 'parts'.
+        trailing_parts = []
+        current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+        if not needs_end:
+            p = max(seen_parts) if seen_parts else None
+            print(f"Found end of book at end of chapter {ch}, part {p}, at {to_hms(current_location)}")
+        else:
+            print(f"Did not find end of book, at {to_hms(current_location)}, digging deeper...")
             skips = 0
-            old_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+            old_location = current_location
             while chapter_next.is_enabled():
                 chapter_next.click()
                 time.sleep(0.5)
@@ -353,22 +355,34 @@ class Scraper:
             current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
             parts = set(int(k) for k in self.requests_to_mp3_files()) - seen_parts
             if skips or parts:
-                severity = "WARNING"
                 if parts:
-                    skips_at_end = skips
-                    severity = "ERROR"
-                print(f"{severity}: {skips} chapters and parts {parts} NOT IN TABLE OF CONTENTS, from {to_hms(old_location)} to {to_hms(current_location)} (diff {to_hms(current_location - old_location)})")
+                    trailing_parts = parts
+                # This isn't terrible, we've found a lot of parts that will be fetched.
+                print(f"WARNING: {skips} chapters and parts {parts} NOT IN TABLE OF CONTENTS, from {to_hms(old_location)} to {to_hms(current_location)} (diff {to_hms(current_location - old_location)})")
 
-        # Build a complete table of upper bounds; given each part, what chapter
-        # is its upper bound (i.e. the place where the NEXT part was first
-        # seen).
-        last_seen = 0
-        part_to_chapter = {chapter_to_part[0]:1}
-        for ch, part in sorted(chapter_to_part.items())[1:]:
+        # Invert the table of chapters to parts, to get a table where given the
+        # part we find which chapter to flip to: either the exact chapter, or
+        # the upper bound for its search (the uppoer bound is used because the
+        # lower bound will change as we find more parts).
+        part_to_chapter = {chapter_to_part[0]:0}
+        last_seen = chapter_to_part[0]
+        for ch, part in sorted(chapter_to_part.items()):
+            if ch == 0:
+                continue
+            # ch is the chapter exactly where 'part' is found.
             for intermediate_pt in range(last_seen+1, part):
+                # often we don't see every part, so we fill in the gaps.
                 part_to_chapter[intermediate_pt] = ch - 1
             last_seen = part
             part_to_chapter[part] = ch
+        past_end = max(part_to_chapter.values()) + 1
+        for part in trailing_parts:
+            part_to_chapter[part] = past_end
+
+        print("Got part->chapter structure:",
+              [f"{part:02d}->{ch} ({to_hms(self.chapter_seconds[ch]) if ch < len(self.chapter_seconds) else '??:??'})"
+              for part, ch in part_to_chapter.items() ]
+              )
 
         # Download part files
         print("Getting files")
@@ -509,13 +523,6 @@ class Scraper:
                         chapter_previous.click()
                         time.sleep(1)
                         current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
-                    # If there's slop at the end with chapter skips, explore it.
-                    if chapter_next.is_enabled() and lower_bound <= current_location <= upper_bound and skips_at_end:
-                        while current_location < lower_bound and chapter_next.is_enabled():
-                            chapter_next.click()
-                            time.sleep(1)
-                            current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
-                        skips_at_end = False
 
                     if self.has_url(part_num):
                         continue

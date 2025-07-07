@@ -1,6 +1,7 @@
 # Use selenium's standalone chrome image (includes Chrome+WebDriver)
-# Pinned to specific Selenium version, no specific version of Chrome
-FROM selenium/standalone-chrome:96.0-20250707
+# Pinned to specific Selenium version because no other way to make build
+# not take forever randomly.
+FROM ${SELENIUM_IMAGE}
 
 # Switch to root to install dependencies
 USER root

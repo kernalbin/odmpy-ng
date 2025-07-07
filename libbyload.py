@@ -1,12 +1,12 @@
 #!/bin/python3
 
-import sys, os
+import sys, os, time
 import json
 import argparse
 import subprocess
-import shutil
+from io import StringIO
 
-from atomicwrites import atomic_write
+
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -37,18 +37,19 @@ def making_progress(base: Path, book: Book, verbose: bool = False) -> bool:
     older = path/'older.files'
     if older.is_file():
         with older.open('r') as f:
-            for line in f:
-                older_files.append(line.strip())
-    if verbose:
-        print(f"Checking {book.title} for progress:")
+            older_files = f.read().splitlines()
+    header = False
     for f in os.listdir(base / 'tmp' / str(book.ID)):
         if not f.endswith('.mp3') or f in older_files:
             continue
         if verbose:
+            if not header:
+                header = True
+                print(f"Checking {book.title} for progress:")
             print(f"  {f}")
-            older_files.append(f)
+        older_files.append(f)
         progress = True
-    with atomic_write(older, overwrite=True) as f:
+    with older.open('w') as f:
         f.write('\n'.join(older_files))
     return progress
 
@@ -102,6 +103,7 @@ def main():
         print("Nothing to do, exiting.")
         sys.exit(0)
 
+    # Set up environment for docker run.
     UID = os.getuid()
     GID = os.getgid()
 
@@ -110,40 +112,95 @@ def main():
     env["HOST_GID"] = str(GID)
     env["DOWNLOAD_BASE"] = str(download_base)
     env["COMPOSE_BAKE"] = "true"
+    env["SELENIUM_IMAGE"] = "selenium/standalone-chrome"
 
-    res = subprocess.run(["docker", "compose", "build"],
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         text=True,
-                         env=env)
-    # Check for failure
-    if res.returncode != 0:
-        print("Build failed. Dumping build output...\n", file=sys.stderr)
-        print(res.stdout)
-        print(res.stderr, file=sys.stderr)
-        sys.exit(res.returncode)
+    # Use a pinned base image, update the pin once a day.
+    needs_build = False
+    image_pin = Path('.') / 'image.pin'
+    if image_pin.is_file() and time.time() - image_pin.stat().st_mtime < 24*60*60:
+        with image_pin.open('r') as f:
+            env["SELENIUM_IMAGE"] = f.read().strip()
+    else:
+        print("Pulling base image...")
+        res = subprocess.call(f'docker pull {env["SELENIUM_IMAGE"]}', shell=True)
+        if res != 0:
+            print(f"Error pulling {env['SELENIUM_IMAGE']}: {res}")
+            sys.exit(1)
+        # Having pulled the latest image (which may not be changed!), record the digest.
+        digest = subprocess.check_output(
+            [ "docker", "inspect", "--format={{index .RepoDigests 0}}", env["SELENIUM_IMAGE"] ],
+            text=True).strip()
+        if digest != env["SELENIUM_IMAGE"]:
+            needs_build = True
+            env["SELENIUM_IMAGE"] = digest
+        # Update the pinning file, so timestamp shows.
+        with image_pin.open('w') as f:
+            f.write(env["SELENIUM_IMAGE"])
+
+    print(f"Using image: {env['SELENIUM_IMAGE']}.")
+    if needs_build:
+        print("Building odmpy-ng image...")
+        res = subprocess.call('docker compose build odmpy-ng', shell=True, env=env)
+        if res != 0:
+            print(f"Error building odmpy-ng: {res}")
+            sys.exit(1)
 
     for book in unrecorded:
         tmp_folder = download_base / 'tmp' / book.ID
-        if (tmp_folder / 'bad').is_file():
-            print(f"Skipping book due to 'bad' flag (delete to retry): {book.title}: {tmp_folder / 'bad'}")
+        bad_marker = tmp_folder / 'bad'
+        if bad_marker.is_file():
+            print(f"Skipping book due to 'bad' flag (delete to retry): {book.title}: {bad_marker}")
             continue
-        print(f"Running odmpy-ng for book: {book.title}")
+
+        print(f"\nRunning odmpy-ng for book: {book.title}")
         res = -1
+        # Using try/finally to handle things like ctrl-c. Include a timeout.
+        log_buf = StringIO()
+        start_time = time.time()
         try:
-            # Using try/finally to handle things like ctrl-c.
-            res = subprocess.call(f"docker compose run --rm odmpy-ng -s={book.site_id} -i={book.ID} -n=libby/{book.ID} -r",
-                                shell=True, env=env)
-            if not making_progress(download_base, book):
+            # Stream output live and collect it
+            proc = subprocess.Popen(f"docker compose run --rm odmpy-ng -s={book.site_id} -i={book.ID} -n=libby/{book.ID} -r",
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1,
+                                shell=True, text=True, env=env)
+            if proc is None or proc.stdout is None:
+                print("Error downloading book {book.ID}, {book.title}: unable to start docker subprocess.")
+                continue
+
+            # Stream output in real time, so onlookers can see progress. Also
+            # store in case of problems, or timeouts.
+            for line in proc.stdout:
+                log_buf.write(line)
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                # Handle timeout.
+                elapsed = time.time() - start_time
+                if elapsed > 60 * 30: # 30 minutes feels like enough!
+                    message = f"Timeout reached after {elapsed//60} minutes for book {book.ID}, killing process."
+                    print(message)
+                    log_buf.write(message + '\n')
+                    if proc.poll() is None:
+                        proc.kill()
+                    break
+
+            proc.stdout.close()
+            res = proc.wait()
+            if res == 0 and not making_progress(download_base, book):
                 res = -1
         finally:
             if res != 0:
-                print(f"Error running odmpy libby for book {book.ID}, {book.title}: {res}")
-                # Scan for leftover files in tmp folder...
-                if os.path.exists(tmp_folder):
-                    if not making_progress(download_base, book, verbose=True):
-                        print("Marking tmp folder as bad, no progress.")
-                        (tmp_folder / 'bad').touch()
-                sys.exit(1)
+                print(f"Error running odmpy-ng for book {book.ID}, {book.title}: {res}")
+                # Given an error, dump the log so we might see why.
+                if not os.path.exists(tmp_folder):
+                    tmp_folder.mkdir(parents=True)
+                log = tmp_folder / 'process.log'
+                log_exists = log.is_file()
+                with log.open('a') as f:
+                    f.write(log_buf.getvalue() + '\n==================\n')
+                # Allow two attempts to make progress (first one creates a log
+                # but doesn't give up, second one appends and gives up).
+                if not making_progress(download_base, book, verbose=True) and not log_exists:
+                    print("Marking tmp folder as bad, no progress.")
+                    (tmp_folder / 'bad').touch()
 
 if __name__ == '__main__':
     main()

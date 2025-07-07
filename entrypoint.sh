@@ -36,7 +36,7 @@ if [[ $1 == "--idle" ]]; then
         printf "."
     done
 else
-    # Drop privileges
-    exec gosu "$username" python3 interactive.py /config/config.json "$@"
+    # Drop privileges (-u to unbuffer, line by line is better for us)
+    exec gosu "$username" python3 -u interactive.py /config/config.json "$@"
 fi
 

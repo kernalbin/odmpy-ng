@@ -3,6 +3,8 @@ services:
     image: odmpy-ng:dev
     build:
       context: .
+      args:
+        SELENIUM_IMAGE: ${SELENIUM_IMAGE}
     environment:
       HOST_UID: ${HOST_UID}
       HOST_GID: ${HOST_GID}
