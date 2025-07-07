@@ -53,6 +53,59 @@ def making_progress(base: Path, book: Book, verbose: bool = False) -> bool:
         f.write('\n'.join(older_files))
     return progress
 
+def build_docker(download_base: Path) -> dict[str, str]:
+    # Set up environment for docker run.
+    UID = os.getuid()
+    GID = os.getgid()
+
+    env = os.environ.copy()
+    env["HOST_UID"] = str(UID)
+    env["HOST_GID"] = str(GID)
+    env["DOWNLOAD_BASE"] = str(download_base)
+    env["COMPOSE_BAKE"] = "true"
+    base_image = "selenium/standalone-chrome"
+
+    # Use a pinned base image, update the pin once a day.
+    needs_build = False
+    full_image = base_image
+    image_pin = Path('.') / 'image.pin'
+    if image_pin.is_file():
+        with image_pin.open('r') as f:
+            full_image = f.read().strip()
+    # If there's no pinned image or it's older than a day, pull the latest.
+    if full_image == base_image or not '@' in full_image or time.time() - image_pin.stat().st_mtime > 24*60*60:
+        print("Pulling base image...")
+        res = subprocess.call(f'docker pull {base_image}', shell=True)
+        if res != 0:
+            print(f"Error pulling {base_image}: {res}")
+            sys.exit(1)
+        # Having pulled the latest image (which may not be changed!), record the digest.
+        digest = subprocess.check_output(
+            [ "docker", "inspect", "--format={{index .RepoDigests 0}}", base_image ],
+            text=True).strip()
+        if not '@' in digest:
+            print(f"Error parsing digest for {base_image}: {digest}")
+            sys.exit(1)
+        if digest != full_image:
+            needs_build = True
+            full_image = digest
+        # Update the pinning file, so timestamp shows.
+        with image_pin.open('w') as f:
+            f.write(digest)
+
+    # Extract the "pin", which is the @sha256 part of the digest.
+    env["SELENIUM_SHA"] = '@' + full_image.split('@')[1]
+
+    print(f"Using image: {full_image}.")
+    if needs_build:
+        print("Building odmpy-ng image...")
+        res = subprocess.call('docker compose build odmpy-ng', shell=True, env=env)
+        if res != 0:
+            print(f"Error building odmpy-ng: {res}")
+            sys.exit(1)
+
+    return env
+
 def main():
     global libby_loc
     
@@ -60,6 +113,7 @@ def main():
 
     # options
     args = argparse.ArgumentParser()
+    args.add_argument('--build-only', action='store_true', help='Run docker compose build for odmpy-ng, do nothing else.')
     args.add_argument('-l', '--libby', help='full name for libby json file', default=libby_loc)
     args.add_argument(
         '-d', '--dest',
@@ -82,6 +136,10 @@ def main():
 
     download_base = Path(opts.dest)
 
+    env = build_docker(download_base)
+    if opts.build_only:
+        sys.exit(0)
+
     libby_dest = download_base / 'libby'
     if not libby_dest.is_dir():
         print(f"Warning: libby path {libby_dest} is not a directory, attempting to create")
@@ -102,48 +160,6 @@ def main():
     if not unrecorded:
         print("Nothing to do, exiting.")
         sys.exit(0)
-
-    # Set up environment for docker run.
-    UID = os.getuid()
-    GID = os.getgid()
-
-    env = os.environ.copy()
-    env["HOST_UID"] = str(UID)
-    env["HOST_GID"] = str(GID)
-    env["DOWNLOAD_BASE"] = str(download_base)
-    env["COMPOSE_BAKE"] = "true"
-    env["SELENIUM_IMAGE"] = "selenium/standalone-chrome"
-
-    # Use a pinned base image, update the pin once a day.
-    needs_build = False
-    image_pin = Path('.') / 'image.pin'
-    if image_pin.is_file() and time.time() - image_pin.stat().st_mtime < 24*60*60:
-        with image_pin.open('r') as f:
-            env["SELENIUM_IMAGE"] = f.read().strip()
-    else:
-        print("Pulling base image...")
-        res = subprocess.call(f'docker pull {env["SELENIUM_IMAGE"]}', shell=True)
-        if res != 0:
-            print(f"Error pulling {env['SELENIUM_IMAGE']}: {res}")
-            sys.exit(1)
-        # Having pulled the latest image (which may not be changed!), record the digest.
-        digest = subprocess.check_output(
-            [ "docker", "inspect", "--format={{index .RepoDigests 0}}", env["SELENIUM_IMAGE"] ],
-            text=True).strip()
-        if digest != env["SELENIUM_IMAGE"]:
-            needs_build = True
-            env["SELENIUM_IMAGE"] = digest
-        # Update the pinning file, so timestamp shows.
-        with image_pin.open('w') as f:
-            f.write(env["SELENIUM_IMAGE"])
-
-    print(f"Using image: {env['SELENIUM_IMAGE']}.")
-    if needs_build:
-        print("Building odmpy-ng image...")
-        res = subprocess.call('docker compose build odmpy-ng', shell=True, env=env)
-        if res != 0:
-            print(f"Error building odmpy-ng: {res}")
-            sys.exit(1)
 
     for book in unrecorded:
         tmp_folder = download_base / 'tmp' / book.ID

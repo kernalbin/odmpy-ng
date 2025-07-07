@@ -4,7 +4,7 @@ services:
     build:
       context: .
       args:
-        SELENIUM_IMAGE: ${SELENIUM_IMAGE}
+        SELENIUM_SHA: ${SELENIUM_SHA}
     environment:
       HOST_UID: ${HOST_UID}
       HOST_GID: ${HOST_GID}

@@ -1,7 +1,9 @@
 # Use selenium's standalone chrome image (includes Chrome+WebDriver)
-# Pinned to specific Selenium version because no other way to make build
-# not take forever randomly.
-FROM ${SELENIUM_IMAGE}
+# Optionally, pass in a SHA tag in the form "@sha256:123456..." to use
+# a specific version, needed because Selenium's images are updated
+# frequently and even dated tags aren't stable.
+ARG SELENIUM_SHA=""
+FROM selenium/standalone-chrome${SELENIUM_SHA}
 
 # Switch to root to install dependencies
 USER root
