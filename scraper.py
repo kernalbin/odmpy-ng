@@ -469,11 +469,13 @@ class Scraper:
                     print(f"Using play toggle between {lower_bound}, {upper_bound} ({span}s), start at {current_location}")
                     try:
                         toggle_play.click()
-                        one_try = False
-                        while one_try or (not self.has_url(part_num) and old_loc+span > current_location):
-                            time.sleep(1)
-                            one_try = True
+                        first_try = True
+                        while first_try or (not self.has_url(part_num) and old_loc+span > current_location):
+                            time.sleep(5 if first_try else 1)
                             current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
+                            if not first_try and not current_location > old_loc:
+                                print(f"Play toggle might not be responding, location was {to_hms(old_loc)}, now {to_hms(current_location)}")
+                            first_try = False
                     finally:
                         toggle_play.click()
                     if self.has_url(part_num):
