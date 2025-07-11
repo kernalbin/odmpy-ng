@@ -148,7 +148,7 @@ class Scraper:
         for index,block in enumerate(loan_blocks):
             try:
                 title_element = block.find_element(By.CLASS_NAME, 'title-name')
-                author_element = block.find_element(By.CLASS_NAME, 'secondary-underline')
+                author_element = block.find_element(By.CLASS_NAME, 'title-author')
                 listen_link = block.find_element(By.PARTIAL_LINK_TEXT, 'Listen now').get_attribute('href')
 
                 book_id = listen_link.split('/')[-1]
