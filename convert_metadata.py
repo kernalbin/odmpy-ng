@@ -17,8 +17,9 @@ def normalize_tag(tag: str) -> str:
 def get_mp3_duration(filepath):
     """Returns the duration of an MP3 file in seconds."""
     mp3 = MP3(filepath)
+    length = mp3.info.length
     if mp3.info.sketchy:
-        return 0
+        raise ValueError(f"Corrupted MP3 file: {filepath}")
     return mp3.info.length
 
 def get_total_duration(directory) -> int:
