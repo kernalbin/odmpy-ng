@@ -253,6 +253,9 @@ class Scraper:
         Returns:
             tuple: (chapter_markers, total_expected_time)
         """
+        if not self.driver:
+            raise Exception("Driver is not initialized")
+
         # Go to book listen page
         self.driver.get(selected_title_link)
         time.sleep(1)
@@ -268,6 +271,11 @@ class Scraper:
 
         chapter_table_open = self.driver.find_element(By.CLASS_NAME, 'chapter-bar-title-button')
 
+        # Allow debugging if one or more fails to fetch. Also turns off "may be None" warnings.
+        fetched = [chapter_previous, chapter_next, toggle_play, timeline_length, timeline_current_time, chapter_table_open]
+        if None in fetched:
+            raise Exception(f"Failed to fetch one or more player elements: {fetched}")
+
         # Get chapter metadata
         print("Getting chapters")
 
@@ -277,9 +285,16 @@ class Scraper:
         chapter_markers = {}
 
         chapter_dialog_table = self.driver.find_element(By.CLASS_NAME, 'chapter-dialog-table')
+        if not chapter_dialog_table:
+            raise Exception("Failed to find chapter dialog table")
 
         chapter_title_elements = chapter_dialog_table.find_elements(By.CLASS_NAME, 'chapter-dialog-row-title')
         chapter_time_elements = chapter_dialog_table.find_elements(By.CLASS_NAME, 'place-phrase-visual')
+
+        if not chapter_title_elements:
+            raise Exception("Failed to find chapter title elements")
+        if not chapter_time_elements:
+            raise Exception("Failed to find chapter time elements")
 
         chapter_times = []
   
@@ -466,10 +481,10 @@ class Scraper:
                     # One last effort.
                     old_loc = current_location
                     span = upper_bound - lower_bound
-                    print(f"Using play toggle between {lower_bound}, {upper_bound} ({span}s), start at {current_location}")
+                    print(f"Using play toggle between {to_hms(lower_bound)}, {to_hms(upper_bound)} ({span}s), start at {current_location}")
+                    first_try = True
                     try:
                         toggle_play.click()
-                        first_try = True
                         while first_try or (not self.has_url(part_num) and old_loc+span > current_location):
                             time.sleep(5 if first_try else 1)
                             current_location = convert_metadata.to_seconds(timeline_current_time.get_attribute("textContent"))
@@ -477,10 +492,13 @@ class Scraper:
                                 print(f"Play toggle might not be responding, location was {to_hms(old_loc)}, now {to_hms(current_location)}")
                             first_try = False
                     finally:
+                        if first_try:
+                            time.sleep(5)
                         toggle_play.click()
                     if self.has_url(part_num):
                         print(f"Found part by using play toggle between {lower_bound}, {upper_bound}")
                         continue
+                    print(f"Need more precise search for {upper_bound - lower_bound}s range between {to_hms(lower_bound)}, {upper_bound}")
                     raise Exception(f"Need more precise search for {upper_bound - lower_bound}s range between {lower_bound}, {upper_bound}")
                 old_upper_bound = upper_bound
 
