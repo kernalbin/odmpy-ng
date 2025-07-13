@@ -149,11 +149,11 @@ class Scraper:
             try:
                 title_element = block.find_element(By.CLASS_NAME, 'title-name')
                 author_element = block.find_element(By.CLASS_NAME, 'title-author')
-                listen_links = block.find_elements(By.PARTIAL_LINK_TEXT, 'Listen now').get_attribute('href')
+                listen_links = block.find_elements(By.PARTIAL_LINK_TEXT, 'Listen now')
                 if not listen_links:
                     print(f"Book at index {index} has no listen link, may not be audiobook: {title_element.text.strip()}")
                     continue
-                listen_link = listen_links[0]
+                listen_link = listen_links[0].get_attribute('href')
                 book_id = listen_link.split('/')[-1]
 
                 books.append({"index": index, "title": title_element.text.strip(), "author": author_element.text.strip(), "link": listen_link, "id": book_id})
