@@ -60,13 +60,14 @@ class Scraper:
     def _login(self) -> list[dict]:
         """Handles login logic and returns a fresh list of cookies."""
         print("Logging in...")
+        if not self.driver:
+            raise Exception("Driver not initialized")
+
         self.driver.get(self.base_url + "/account/ozone/sign-in")
 
         # Dismiss cookie banner if present
-        try:
-            self.driver.find_element(By.CLASS_NAME, 'cookie-banner-close-button').click()
-        except:
-            pass
+        banners = self.driver.find_elements(By.CLASS_NAME, 'cookie-banner-close-button')
+        if banners: banners[0].click()
 
         # Enter credentials
         signin_button = self.driver.find_element(By.CLASS_NAME, 'signin-button')
@@ -112,16 +113,12 @@ class Scraper:
         # Go to authenticated page to test if cookies are still valid
         self.driver.get(self.base_url + "/account/loans")
 
-        try:
-            loans_title = self.driver.find_element(By.CLASS_NAME, 'account-title')
-            if loans_title:
-                if "Loans" in loans_title.text:
-                    # Already have valid session
-                    return cookies
-            return self._login()
-        except NoSuchElementException:
-            
-            # Get new valid session
+        loans_titles = self.driver.find_elements(By.CLASS_NAME, 'account-title')
+        if loans_titles:
+            if "Loans" in loans_titles[0].text:
+                # Already have valid session
+                return cookies
+        else:
             return self._login()
 
     def get_loans(self):
@@ -132,6 +129,9 @@ class Scraper:
             list: List of dictionaries with book info: title, author, link, and ID.
         """
         print("Finding books...")
+        if not self.driver:
+            raise Exception("Driver not initialized")
+
         self.driver.get(self.base_url + "/account/loans")
 
         try:
@@ -146,19 +146,19 @@ class Scraper:
         loan_blocks = self.driver.find_elements(By.CLASS_NAME, 'Loans-TitleContainerRight')
 
         for index,block in enumerate(loan_blocks):
-            try:
-                title_element = block.find_element(By.CLASS_NAME, 'title-name')
-                author_element = block.find_element(By.CLASS_NAME, 'title-author')
-                listen_links = block.find_elements(By.PARTIAL_LINK_TEXT, 'Listen now')
-                if not listen_links:
-                    print(f"Book at index {index} has no listen link, may not be audiobook: {title_element.text.strip()}")
-                    continue
-                listen_link = listen_links[0].get_attribute('href')
-                book_id = listen_link.split('/')[-1]
+            title_element = block.find_element(By.CLASS_NAME, 'title-name')
+            author_element = block.find_element(By.CLASS_NAME, 'title-author')
+            listen_links = block.find_elements(By.PARTIAL_LINK_TEXT, 'Listen now')
+            listen_link = book_id = None
+            # Parse cautiously, other media types can be checked out but we don't get them.
+            if listen_links:
+                if listen_link := listen_links[0].get_attribute('href'):
+                    book_id = listen_link.split('/')[-1]
+            if not book_id:
+                print(f"Book at index {index} has no listen link, may not be audiobook: {title_element.text.strip()}")
+                continue
 
-                books.append({"index": index, "title": title_element.text.strip(), "author": author_element.text.strip(), "link": listen_link, "id": book_id})
-            except Exception as e:
-                print(f"Failed to parse loan at index {index}: {e}")
+            books.append({"index": index, "title": title_element.text.strip(), "author": author_element.text.strip(), "link": listen_link, "id": book_id})
 
         return books
     

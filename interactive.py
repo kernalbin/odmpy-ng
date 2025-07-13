@@ -17,7 +17,7 @@ import convert_metadata
 
 # Convert user entered string into a list of valid book indexes
 # Allows for comma separated items and dash separated ranges
-def parse_book_selection_input(userinput: str, books: list) -> set:
+def parse_book_selection_input(userinput: str, books: list) -> list[int]:
     """
     Parses a comma-separated and range-based string into a list of valid book indexes.
 
@@ -36,15 +36,16 @@ def parse_book_selection_input(userinput: str, books: list) -> set:
     for part in parts:
         part = part.strip()
         if '-' in part:
-            try:
+            parts = part.split('-')
+            if all(part.isdigit() for part in parts):
                 start, end = map(int, part.split('-'))
                 parts_set.update(range(start, end+1))
-            except ValueError:
+            else:
                 raise ValueError(f"Invalid range input: {part}")
         else:
-            try:
+            if part.isdigit():
                 parts_set.add(int(part))
-            except ValueError:
+            else:
                 raise ValueError(f"Invalid integer input: {part}")
             
     return sorted(parts_set.intersection(valid_indexes))
@@ -82,15 +83,15 @@ def main():
         sys.exit(1)
 
     config_file = args.config_file
-    try:
+    if os.path.isfile(config_file):
         with open(config_file) as f:
-            config = json.load(f)
-    except FileNotFoundError:
+            try:
+                config = json.load(f)
+            except json.JSONDecodeError:
+                print(f"Error: Config file '{config_file}' is not valid JSON")
+                sys.exit(1)    
+    else:
         print(f"Error: Config file '{config_file}' not found")
-        sys.exit(1)
-    except json.JSONDecodeError:
-        print(f"Error: Config file '{config_file}' is not valid JSON")
-        sys.exit(1)    
 
     config_dir = os.path.dirname(config_file)
     if not os.path.exists(config_dir):

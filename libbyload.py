@@ -28,7 +28,7 @@ def load_libby():
         data = json.load(f)
     return data
 
-def making_progress(base: Path, book: Book, verbose: bool = False) -> bool:
+def making_progress(base: Path, book: Book, verbose: bool = False, only_check_previous_run: bool = False) -> bool:
     progress = False
     path = base / 'tmp' / str(book.ID)
     if not path.is_dir():
@@ -38,6 +38,8 @@ def making_progress(base: Path, book: Book, verbose: bool = False) -> bool:
     if older.is_file():
         with older.open('r') as f:
             older_files = f.read().splitlines()
+    if only_check_previous_run:
+        return len(older_files) > 0
     header = False
     for f in os.listdir(base / 'tmp' / str(book.ID)):
         if not f.endswith('.mp3') or f in older_files:
@@ -49,8 +51,9 @@ def making_progress(base: Path, book: Book, verbose: bool = False) -> bool:
             print(f"  {f}")
         older_files.append(f)
         progress = True
-    with older.open('w') as f:
-        f.write('\n'.join(older_files))
+    if older_files:
+        with older.open('w') as f:
+            f.write('\n'.join(older_files))
     return progress
 
 def build_docker(download_base: Path) -> dict[str, str]:
@@ -169,54 +172,70 @@ def main():
             continue
 
         print(f"\nRunning odmpy-ng for book: {book.title}")
+
+        was_previously_run = making_progress(download_base, book, only_check_previous_run=True)
         res = -1
         # Using try/finally to handle things like ctrl-c. Include a timeout.
-        log_buf = StringIO()
+        out_buf = StringIO()
+        err_buf = StringIO()
         start_time = time.time()
+        proc = None
+
         try:
             # Stream output live and collect it
             proc = subprocess.Popen(f"docker compose run --rm odmpy-ng -s={book.site_id} -i={book.ID} -n=libby/{book.ID} -r",
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1,
                                 shell=True, text=True, env=env)
-            if proc is None or proc.stdout is None:
+            if proc is None or proc.stdout is None or proc.stderr is None:
                 print("Error downloading book {book.ID}, {book.title}: unable to start docker subprocess.")
                 continue
 
             # Stream output in real time, so onlookers can see progress. Also
             # store in case of problems, or timeouts.
             for line in proc.stdout:
-                log_buf.write(line)
+                out_buf.write(line)
                 sys.stdout.write(line)
                 sys.stdout.flush()
                 # Handle timeout.
                 elapsed = time.time() - start_time
                 if elapsed > 60 * 30: # 30 minutes feels like enough!
+                    stdout = proc.stdout.read() + '\n'
+                    sys.stdout.write(stdout)
+                    out_buf.write(stdout)
                     message = f"Timeout reached after {elapsed//60} minutes for book {book.ID}, killing process."
                     print(message)
-                    log_buf.write(message + '\n')
+                    out_buf.write(message + '\n')
                     if proc.poll() is None:
                         proc.kill()
                     break
-
-            proc.stdout.close()
-            res = proc.wait()
-            if res == 0 and not making_progress(download_base, book):
-                res = -1
         finally:
-            if res != 0:
-                print(f"Error running odmpy-ng for book {book.ID}, {book.title}: {res}")
+            # Collect stderr and cleanup proc.
+            res = -1
+            if proc is not None and proc.stdout is not None and proc.stderr is not None:
+                stderr = proc.stderr.read() + '\n'
+                sys.stdout.write(stderr)
+                out_buf.write(stderr)
+                proc.stderr.close()
+                proc.stdout.close()
+                res = proc.wait()
+            else:
+                print("Error downloading book {book.ID}, {book.title}: no subprocess started.")
+
+            made_progress = making_progress(download_base, book, verbose=True)
+            if res != 0 or not made_progress:
+                print(f"Error running odmpy-ng for book {book.ID}, {book.title}: {res} ",
+                      ("no progress made" if not made_progress else ""))
                 # Given an error, dump the log so we might see why.
                 if not os.path.exists(tmp_folder):
                     tmp_folder.mkdir(parents=True)
                 log = tmp_folder / 'process.log'
-                log_exists = log.is_file()
                 with log.open('a') as f:
-                    f.write(log_buf.getvalue() + '\n==================\n')
-                # Allow two attempts to make progress (first one creates a log
-                # but doesn't give up, second one appends and gives up).
-                if not making_progress(download_base, book, verbose=True) and not log_exists:
-                    print("Marking tmp folder as bad, no progress.")
-                    (tmp_folder / 'bad').touch()
+                    f.write(out_buf.getvalue() + '\n==================\n')
+                # Allow two attempts to make progress, then give up.
+                if was_previously_run and not made_progress:
+                    badfile = tmp_folder / 'bad'
+                    print("Marking tmp folder as bad, previous downloads made but no progress this time:", badfile)
+                    badfile.touch()
 
 if __name__ == '__main__':
     main()
