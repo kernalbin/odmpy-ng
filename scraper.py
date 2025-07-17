@@ -437,7 +437,7 @@ class Scraper:
             print(f"Resuming download from {part_num} part(s) at {to_hms(loaded_duration)}")
 
         # Main loop for walking through book
-        while loaded_duration >= expected_duration-1:
+        while loaded_duration < expected_duration-1:
             # Collect available urls, and download next part; this also detects
             # loop end when audio is complete.
             mp3_urls = self.requests_to_mp3_files()
