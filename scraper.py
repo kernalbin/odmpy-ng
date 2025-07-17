@@ -437,7 +437,7 @@ class Scraper:
             print(f"Resuming download from {part_num} part(s) at {to_hms(loaded_duration)}")
 
         # Main loop for walking through book
-        while True:
+        while loaded_duration >= expected_duration-1:
             # Collect available urls, and download next part; this also detects
             # loop end when audio is complete.
             mp3_urls = self.requests_to_mp3_files()
@@ -449,10 +449,6 @@ class Scraper:
                     # Use ground truth from metadata rather than adding approximations
                     loaded_duration = convert_metadata.get_total_duration(download_path)
                     print(f"{to_hms(loaded_duration)} / {to_hms(expected_duration)} - {loaded_duration}/{expected_duration} sec  -  {loaded_duration/expected_duration*100.0:.2f}%")
-                    if loaded_duration >= expected_duration-1:
-                        print("Downloaded complete audio")
-                        print(f"Book contained {part_num} part(s)")
-                        break
                     part_num += 1
                     continue
                 else:
@@ -602,6 +598,10 @@ class Scraper:
                     print(f"No URL for {part_num} at {upper_bound}, reducing to {current_location-1}.")
                     upper_bound = current_location - 1
 
+        if loaded_duration >= expected_duration-1:
+            print("Downloaded complete audio")
+            print(f"Book contained {part_num} part(s)")
+
         # Attempt to find and save cover image
         cover_image_url = next(
             (req.url for req in self.driver.requests if req.response and '.jpg' in req.url and 'listen.overdrive.com' in req.url),
@@ -613,3 +613,4 @@ class Scraper:
             print("Downloaded cover")
 
         return (chapter_markers, expected_time)
+
