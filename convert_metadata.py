@@ -16,16 +16,20 @@ def normalize_tag(tag: str) -> str:
 
 def get_mp3_duration(filepath):
     """Returns the duration of an MP3 file in seconds."""
-    return MP3(filepath).info.length
+    mp3 = MP3(filepath)
+    length = mp3.info.length
+    if mp3.info.sketchy:
+        raise ValueError(f"Corrupted MP3 file: {filepath}")
+    return mp3.info.length
 
-def get_total_duration(directory):
+def get_total_duration(directory) -> int:
     """Calculates the total duration of all MP3 files in a directory."""
     total_duration = 0
     for filename in os.listdir(directory):
         if filename.endswith(".mp3"):
             filepath = os.path.join(directory, filename)
             total_duration += get_mp3_duration(filepath)
-    return total_duration
+    return int(total_duration)
 
 def abs_from_pylibby(container, mark_autoloaded=["Misordered"]):
     # pylibby uses two different formats, not sure why.
@@ -361,6 +365,12 @@ def to_seconds(hms: str) -> int:
     parts = list(map(int, hms.split(":")))
     return sum(x * 60**i for i, x in enumerate(reversed(parts)))
 
+def to_hms(seconds: int) -> str:
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    seconds = seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
 def main():
     if len(sys.argv) != 3:
         print("Usage: python transform_json.py <ifilename> <total_duration>")
@@ -396,7 +406,7 @@ def convert_file(filename: str, total_duration: str):
         if chapters:
             chapters[-1]['end'] = total_seconds
 
-    output_data = abs_from_pylibby(input_data, ["OdmpyNG"])
+    output_data = abs_from_pylibby(input_data, ["Autoloaded", "OdmpyNG"])
     if chapters:
         output_data['chapters'] = chapters
 
