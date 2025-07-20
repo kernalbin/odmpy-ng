@@ -600,7 +600,7 @@ class Scraper:
 
         if loaded_duration >= expected_duration-1:
             print("Downloaded complete audio")
-            print(f"Book contained {part_num} part(s)")
+            print(f"Book contained {part_num-1} part(s)")
 
         # Attempt to find and save cover image
         cover_image_url = next(
