@@ -47,7 +47,8 @@ def build_docker(download_base: Path) -> dict[str, str]:
             f.write(digest)
 
     # Extract the "pin", which is the @sha256 part of the digest.
-    env["SELENIUM_SHA"] = '@' + full_image.split('@')[1]
+    image_pin = '@' + full_image.split('@')[1]
+    env["SELENIUM_SHA"] = image_pin
 
     print(f"Using image: {full_image}.")
     if needs_build:
@@ -57,7 +58,7 @@ def build_docker(download_base: Path) -> dict[str, str]:
             print(f"Error building odmpy-ng: {res}")
             sys.exit(1)
 
-    return env
+    print(image_pin)
 
 def main():
     default_dest = os.getenv('AUDIOBOOK_FOLDER', None)
@@ -80,7 +81,7 @@ def main():
 
     download_base = Path(opts.dest)
 
-    env = build_docker(download_base)
+    build_docker(download_base)
 
 if __name__ == '__main__':
     main()
