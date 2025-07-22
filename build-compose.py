@@ -59,6 +59,7 @@ def build_docker(download_base: Path) -> dict[str, str]:
             sys.exit(1)
 
     print(image_pin)
+    return env
 
 def main():
     default_dest = os.getenv('AUDIOBOOK_FOLDER', None)
@@ -71,6 +72,8 @@ def main():
         default=default_dest,
         help=f'Directory under which files will be finally stored (default: AUDIOBOOK_FOLDER environment variable={default_dest})'
     )
+    # Use argument 'run' to call the docker with the rest of the arguments.
+    args.add_argument('run', nargs=argparse.REMAINDER)
 
     # parse
     opts = args.parse_args()
@@ -81,7 +84,11 @@ def main():
 
     download_base = Path(opts.dest)
 
-    build_docker(download_base)
+    env = build_docker(download_base)
+
+    if opts.run:
+        res = subprocess.call("docker compose run -it --rm odmpy-ng " + ' '.join(opts.run[1:]), shell=True, env=env)
+        sys.exit(res)
 
 if __name__ == '__main__':
     main()

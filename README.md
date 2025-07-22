@@ -11,15 +11,18 @@
 - Converts MP3s into .m4b files with embedded chapter metadata
 - Generates metadata.json compatible with Audiobookshelf
 - Customizable and automated scraping via Selenium
+- Fully command-line compatible (one book per call)
 
 ---
 
-## Installation
+## Running
 
+Before running, you must configure the tool with a configuration file, see
+Configuration section below.
 
 ### Option 1: Run with Docker
 
-This is the preferred usage method.
+This (or docker compose) is the preferred usage method.
 
 Requirements:
 - Docker
@@ -32,6 +35,7 @@ docker build -t odmpy-ng .
 docker run -it --rm \
   -v ./config:/config \
   -v ./downloads:/downloads \
+  -v .:/app:ro \
   -e HOST_UID=$(id -u) \
   -e HOST_GID=$(id -g) \
   odmpy-ng
@@ -39,7 +43,29 @@ docker run -it --rm \
 
 ---
 
-### Option 2: Run Locally
+### Option 2: Run with Docker Compose
+
+This can make development easier, since it builds quicker and only needs to be
+told the path to the books ouptut directory (and that can be provided by an
+environment variable, AUDIOBOOK_FOLDER).
+
+Use `./build-compose.py` to build the docker-compose file.
+
+See `build-compose.py run --help` for odmpy-ng options.
+
+Requirements:
+- Docker Compose
+- Git
+
+```bash
+git clone https://github.com/kernalbin/odmpy-ng.git
+cd odmpy-ng
+./build-compose.py -d ~/audiobooks run
+```
+
+---
+
+### Option 3: Run Locally
 
 Requirements:
 - Python 3.9+
@@ -81,6 +107,10 @@ Example `config.json`:
 }
 ```
 
+Optionally, each library may have a '"site-id": int' key, which may be passed
+to the -s option to skip past the library selection screen. Any site-id values
+provided must be unique.
+
 ---
 
 ## Project Structure
@@ -100,7 +130,6 @@ Example `config.json`:
 ## Roadmap
 
 - [ ] Minimize bot-like behavior to reduce detection risk  
-- [x] Fully command-line compatible (partial support)  
 - [ ] Batch download multiple books  
 - [ ] Filter loans by media type
 - [ ] Support for branch libraries
