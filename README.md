@@ -109,7 +109,45 @@ Example `config.json`:
 
 Optionally, each library may have a '"site-id": int' key, which may be passed
 to the -s option to skip past the library selection screen. Any site-id values
-provided must be unique.
+provided must be unique within your configuration file.
+
+---
+
+## Command Line Options
+
+A quick look at the command line options:
+
+```bash
+$ ./build-compose.py -d ~/audiobooks run --help
+Using image: selenium/standalone-chrome@sha256:27edde51c30256aa3dfab3c95141ce74fd971c58763f4f8c70ff7521faae3d2b.
+@sha256:27edde51c30256aa3dfab3c95141ce74fd971c58763f4f8c70ff7521faae3d2b
+Run commands as in-container user ubuntu (UID: 1000, GID: 1000)
+Process arguments for /entrypoint.sh --help
+Starting ODMPY-NG
+usage: interactive.py [-h] [--id ID] [--retry] [--name-dir NAME_DIR] [--library LIBRARY | --site-id SITE_ID] config_file
+
+positional arguments:
+  config_file           Path to config file
+
+options:
+  -h, --help            show this help message and exit
+  --id ID, -i ID        Libby ID for a single book to download
+  --retry, -r           Allow retry of stopped downloads (if left in tmp dir)
+  --name-dir NAME_DIR, -n NAME_DIR
+                        Fixed subdirectory relative to /downloads to move single downloaded book to
+  --library LIBRARY, -L LIBRARY
+                        Index of library within config to download from
+  --site-id SITE_ID, -s SITE_ID
+                        Site-Id assigned in config to library to download from
+```
+
+This demo shows a run of the builder, which has two options you need to know
+about: `-d`/`--download-base` and `run`. The first is the location of the
+output directory for the downloaded files, and the second means after building,
+run the audiobook downloader. Any options following `run` will be passed to the
+downloader (note: they're all optional!). For freqent use, `-d` can be omitted
+if AUDIOBOOK_FOLDER is set in your environment, leaving a very simple `run`
+command.
 
 ---
 
