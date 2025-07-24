@@ -159,7 +159,7 @@ for them above, but here's a table with some brief descriptions:
 | `-r`, `--retry`           | Allow retry of stopped downloads (if left in tmp dir). You can enable this after a download fails, the cleanup happens before the run, not after. |
 | `-L`, `--library`         | If you have multiple libraries in your config, you can specify which one to download from, counted from 0. |
 | `-s`, `--site-id`         | Same as above, but if your library entries have a site-id you can use that for this option. |
-| `-n`, `--name-dir`        | This can only be used when you select one single book, either by --id or manually; it will place the downloaded book into the indicated subfolder of your -d downloads directory. |
+| `-n`, `--name-dir`        | This can only be used when you select one single book, either by --id or manually; it will place the downloaded book into the indicated subfolder of your -d downloads directory. If this option isn't provided, the author and title will be used to build the book's folder name (be cautious, many series have the same name for every book). |
 
 ---
 
