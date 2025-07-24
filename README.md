@@ -107,9 +107,9 @@ Example `config.json`:
 }
 ```
 
-Optionally, each library may have a '"site-id": int' key, which may be passed
-to the -s option to skip past the library selection screen. Any site-id values
-provided must be unique within your configuration file.
+Optionally, each library may have a "site-id" key with an integer value, which
+may be passed to the -s option to skip past the library selection screen. Any
+site-id values provided must be unique within your configuration file.
 
 ---
 
