@@ -149,6 +149,18 @@ downloader (note: they're all optional!). For freqent use, `-d` can be omitted
 if AUDIOBOOK_FOLDER is set in your environment, leaving a very simple `run`
 command.
 
+Once you've used the downloader a few times and checked that it puts files in
+the right places, you might want to check out the options. You can see the help
+for them above, but here's a table with some brief descriptions:
+
+| Option                | Description |
+|-----------------------|-------------|
+| -i, --id              | Libby ID for a single book to download. You can see this from your library's webpage for the book. |
+| -r, --retry           | Allow retry of stopped downloads (if left in tmp dir). You can enable this after a download fails, the cleanup happens before the run, not after. |
+| -L, --library         | If you have multiple libraries in your config, you can specify which one to download from, counted from 0. |
+| -s, --site-id         | Same as above, but if your library entries have a site-id you can use that for this option. |
+| -n, --name-dir        | This can only be used when you select one single book, either by --id or manually; it will place the downloaded book into the indicated subfolder of your -d downloads directory. |
+
 ---
 
 ## Project Structure
