@@ -9,9 +9,11 @@ services:
       HOST_UID: ${HOST_UID}
       HOST_GID: ${HOST_GID}
       DOWNLOAD_BASE: ${DOWNLOAD_BASE}
+      TMP_BASE: ${TMP_BASE}
     volumes:
       - ./config:/config
       - ${DOWNLOAD_BASE}:/downloads
+      - ${TMP_BASE}:/tmp-downloads
       - ./:/app:ro
     entrypoint: ["/entrypoint.sh"]
     command: []

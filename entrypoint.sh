@@ -27,7 +27,8 @@ echo "Run commands as in-container user $username (UID: $HOST_UID, GID: $HOST_GI
 
 # Fix permissions
 mkdir -p /downloads
-chown $HOST_UID:$HOST_GID /downloads
+mkdir -p /tmp-downloads
+chown $HOST_UID:$HOST_GID /downloads /tmp-downloads
 
 echo "Process arguments for $0 $@"
 if [[ $1 == "--idle" ]]; then

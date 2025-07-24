@@ -35,6 +35,7 @@ docker build -t odmpy-ng .
 docker run -it --rm \
   -v ./config:/config \
   -v ./downloads:/downloads \
+  -v ./tmp-downloads:/tmp-downloads \
   -v .:/app:ro \
   -e HOST_UID=$(id -u) \
   -e HOST_GID=$(id -g) \
@@ -54,13 +55,16 @@ Use `./build-compose.py` to build the docker-compose file.
 See `build-compose.py run --help` for odmpy-ng options.
 
 Requirements:
-- Docker Compose
+- Docker Compose (note that the older docker-compose is not supported)
 - Git
+- Python 3.9+ on your host computer
 
 ```bash
 git clone https://github.com/kernalbin/odmpy-ng.git
 cd odmpy-ng
-./build-compose.py -d ~/audiobooks run
+cp config/config.example.json config/config.json
+# edit config/config.json
+./build-compose.py -d ~/audiobooks -t ~/mytmp run
 ```
 
 ---
@@ -141,12 +145,15 @@ options:
                         Site-Id assigned in config to library to download from
 ```
 
-This demo shows a run of the builder, which has two options you need to know
-about: `-d`/`--download-base` and `run`. The first is the location of the
-output directory for the downloaded files, and the second means after building,
-run the audiobook downloader. Any options following `run` will be passed to the
-downloader (note: they're all optional!). For freqent use, `-d` can be omitted
-if AUDIOBOOK_FOLDER is set in your environment, leaving a very simple `run`
+This demo shows a run of the builder, which has three options you need to know
+about: `-d`/`--download-base`, `-t`/`--tmp-dir`, and `run`. The first is the
+location of the output directory for the downloaded files, the second allows a
+different folder to be used for in-progress downloads, and the third allows
+you, after building, to actually run the audiobook downloader. Any options
+following `run` will be passed to the downloader (note: they're all optional!).
+For freqent use, `-d` can be omitted if AUDIOBOOK_FOLDER is set in your
+environment, and `-t` can be specified with TMP_BASE or allowed to default to
+the `tmp` subfolder of your download folder, leaving a very simple `run`
 command.
 
 Once you've used the downloader a few times and checked that it puts files in

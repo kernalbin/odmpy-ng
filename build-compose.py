@@ -6,7 +6,7 @@ import subprocess
 
 from pathlib import Path
 
-def build_docker(download_base: Path) -> dict[str, str]:
+def build_docker(download_base: Path, tmp_base: Path) -> dict[str, str]:
     # Set up environment for docker run.
     UID = os.getuid()
     GID = os.getgid()
@@ -15,6 +15,7 @@ def build_docker(download_base: Path) -> dict[str, str]:
     env["HOST_UID"] = str(UID)
     env["HOST_GID"] = str(GID)
     env["DOWNLOAD_BASE"] = str(download_base)
+    env["TMP_BASE"] = str(tmp_base)
     env["COMPOSE_BAKE"] = "true"
     base_image = "selenium/standalone-chrome"
 
@@ -63,6 +64,9 @@ def build_docker(download_base: Path) -> dict[str, str]:
 
 def main():
     default_dest = os.getenv('AUDIOBOOK_FOLDER', None)
+    default_tmp = os.getenv('TMP_BASE', None)
+    if not default_tmp and default_dest:
+        default_tmp = Path(default_dest) / 'tmp'
 
     # options
     args = argparse.ArgumentParser()
@@ -72,6 +76,12 @@ def main():
         default=default_dest,
         help=f'Directory under which files will be finally stored (default: AUDIOBOOK_FOLDER environment variable={default_dest})'
     )
+    args.add_argument(
+        '-t', '--tmp',
+        type=str,
+        default=default_tmp,
+        help=f'Directory under which temporary files will be stored (default: TMP_BASE environment variable or dest/tmp)'
+    )
     # Use argument 'run' to call the docker with the rest of the arguments.
     args.add_argument('run', nargs=argparse.REMAINDER)
 
@@ -79,12 +89,13 @@ def main():
     opts = args.parse_args()
 
     if not opts.dest:
-        print("Error: no destination directory specified")
+        print("Error: no destination directory specified, use -d or AUDIOBOOK_FOLDER environment variable")
+        sys.exit(1)
+    if not opts.tmp:
+        print("Error: no temporary directory specified, use -t or TMP_BASE environment variable")
         sys.exit(1)
 
-    download_base = Path(opts.dest)
-
-    env = build_docker(download_base)
+    env = build_docker(Path(opts.dest), Path(opts.tmp))
 
     if opts.run:
         res = subprocess.call("docker compose run -it --rm odmpy-ng " + ' '.join(opts.run[1:]), shell=True, env=env)

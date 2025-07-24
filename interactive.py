@@ -98,6 +98,10 @@ def main():
         print(f"Error: Config directory '{config_dir}' not found")
         sys.exit(1)
 
+    downloads_dir = pathlib.Path("/downloads")
+    tmp_base = pathlib.Path("/tmp-downloads")
+    tmp_base.mkdir(parents=True, exist_ok=True)
+
     cookies = []
     cookie_file = os.path.join(config_dir, "cookies")
     if os.path.exists(cookie_file):
@@ -168,7 +172,7 @@ def main():
         "library": selected_library["url"],
         "user": selected_library["card_number"],
         "pass": selected_library["pin"],
-        "download-dir": '/downloads', # NOTE: not actually accessed by the scraper, only here!!!
+        "download-dir": downloads_dir, # NOTE: not actually accessed by the scraper, only here!!!
         "tmp-dir": None, # to be filled in later
         "allow-retry": args.retry,
         "id": args.id,
@@ -220,11 +224,11 @@ def main():
             continue
 
         # Create tmp directory with absolute path, one for each book.
-        tmp_dir = os.path.abspath(os.path.join(scraper_config["download-dir"], "tmp", book_selection["id"]))
-        scraper_config["tmp-dir"] = tmp_dir
+        tmp_dir = tmp_base / book_selection["id"]
+        scraper_config["tmp-dir"] = str(tmp_dir)
         if os.path.exists(tmp_dir) and not scraper_config.get("allow-retry"):
             shutil.rmtree(tmp_dir)
-        os.makedirs(tmp_dir, mode=0o755, exist_ok=True)
+        tmp_dir.mkdir(parents=True, exist_ok=True)
 
         print(f"Accessing {book_selection['title']}, ID: {book_selection['id']}")
 
