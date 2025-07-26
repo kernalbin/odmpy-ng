@@ -92,6 +92,7 @@ def main():
                 sys.exit(1)    
     else:
         print(f"Error: Config file '{config_file}' not found")
+        sys.exit(1)    
 
     config_dir = os.path.dirname(config_file)
     if not os.path.exists(config_dir):
@@ -165,19 +166,18 @@ def main():
     if library_index is None or library_index < 0 or library_index >= len(libraries):
         print("Invalid library selection")
         sys.exit(1)
-        
+
     # Create a compatible config object for the scraper
     selected_library = libraries[library_index]
     scraper_config = {
         "library": selected_library["url"],
         "user": selected_library["card_number"],
         "pass": selected_library["pin"],
-        "download-dir": downloads_dir, # NOTE: not actually accessed by the scraper, only here!!!
         "tmp-dir": None, # to be filled in later
         "allow-retry": args.retry,
         "id": args.id,
     }
-    os.makedirs(scraper_config["download-dir"], mode=0o755, exist_ok=True)
+    os.makedirs(downloads_dir, mode=0o755, exist_ok=True)
         
     print(f"Using library: {selected_library['name']}")
 
@@ -246,20 +246,19 @@ def main():
 
         # Save current cookies for upcoming downloads
         cookies = scraper.get_cookies()
+        filter_table = str.maketrans(dict.fromkeys(string.punctuation))
 
         if args.name_dir:
-            download_path = os.path.abspath(os.path.join(scraper_config["download-dir"], args.name_dir))
+            download_path = os.path.abspath(os.path.join(downloads_dir, args.name_dir))
         else:
             # Filter to remove punctuation from book title/author for file path
-            filter_table = str.maketrans(dict.fromkeys(string.punctuation))
             download_path = os.path.abspath(os.path.join(
-                scraper_config["download-dir"], 
+                downloads_dir, 
                 book_author.translate(filter_table), 
                 book_title.translate(filter_table)
             ))
 
         os.makedirs(download_path, exist_ok=True)
-
 
         if config.get("download_thunder_metadata", 0) or config.get("convert_audiobookshelf_metadata", 0):
             # Both of these require thunder metadata.
@@ -277,7 +276,6 @@ def main():
                         os.unlink(chapters_path)
                         print("Cleaned up json metadata")
 
-
         if config.get("skip_reencode", 0):
             # Just copy everything to the dest.
             source, dest = pathlib.Path(tmp_dir), pathlib.Path(download_path)
@@ -292,13 +290,13 @@ def main():
 
             print("Generating metadata")
             ffmetadata.write_metafile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
-            
+
             print("Adding metadata to audiobook")
             cover_path = os.path.abspath(os.path.join(tmp_dir, "cover.jpg"))
 
             sanitized_title = book_title.translate(filter_table).replace(" ", "")
             output_file = os.path.abspath(os.path.join(download_path, sanitized_title + ".m4b"))
-            
+
             if file_conversions.encode_metadata(tmp_dir, "temp.m4b", output_file, "ffmetadata", cover_path):
                 print("Finished file created")
 
