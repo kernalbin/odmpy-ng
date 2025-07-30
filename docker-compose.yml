@@ -8,12 +8,12 @@ services:
     environment:
       HOST_UID: ${HOST_UID}
       HOST_GID: ${HOST_GID}
-      DOWNLOAD_BASE: ${DOWNLOAD_BASE}
-      TMP_BASE: ${TMP_BASE}
+      AUDIOBOOK_FOLDER: ${AUDIOBOOK_FOLDER}
+      AUDIOBOOK_TMP: ${AUDIOBOOK_TMP}
     volumes:
       - ./config:/config
-      - ${DOWNLOAD_BASE}:/downloads
-      - ${TMP_BASE}:/tmp-downloads
+      - ${AUDIOBOOK_FOLDER}:/downloads
+      - ${AUDIOBOOK_TMP}:/tmp-downloads
       - ./:/app:ro
     entrypoint: ["/entrypoint.sh"]
     command: []

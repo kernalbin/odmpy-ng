@@ -152,8 +152,8 @@ different folder to be used for in-progress downloads, and the third allows
 you, after building, to actually run the audiobook downloader. Any options
 following `run` will be passed to the downloader (note: they're all optional!).
 For freqent use, `-d` can be omitted if AUDIOBOOK_FOLDER is set in your
-environment, and `-t` can be specified with TMP_BASE or allowed to default to
-the `tmp` subfolder of your download folder, leaving a very simple `run`
+environment, and `-t` can be specified with AUDIOBOOK_TMP or allowed to default
+to the `tmp` subfolder of your download folder, leaving a very simple `run`
 command.
 
 Once you've used the downloader a few times and checked that it puts files in
