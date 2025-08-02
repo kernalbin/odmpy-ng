@@ -245,7 +245,7 @@ class Scraper:
         desired_chapter = earliest_chapter if earliest_distance <= ending_distance else ending_chapter
         return (desired_chapter, self.chapter_seconds[desired_chapter]), current_chapter
 
-    def get_book(self, selected_title_link: str, download_path: str):
+    def get_book(self, selected_title_link: str, download_path: str) -> list[Tuple[int, int]]:
         """
         Downloads the selected audiobook and associated metadata.
 
@@ -254,7 +254,7 @@ class Scraper:
             download_path (str): Folder path to save the book to.
 
         Returns:
-            tuple: (chapter_markers, total_expected_time)
+            chapter_markers
         """
         if not self.driver:
             raise Exception("Driver is not initialized")
@@ -285,7 +285,7 @@ class Scraper:
         chapter_table_open.click()
         time.sleep(1)
 
-        chapter_markers = {}
+        chapter_markers = []
 
         chapter_dialog_table = self.driver.find_element(By.CLASS_NAME, 'chapter-dialog-table')
         if not chapter_dialog_table:
@@ -312,7 +312,9 @@ class Scraper:
         for index, title in enumerate(chapter_title_elements):
             if index == 0:
                 title.click()
-            chapter_markers[title.text] = chapter_times[index]
+            # The end of each chapter is the start of the next.
+            end = self.chapter_seconds[index+1] if index+1 < len(self.chapter_seconds) else None
+            chapter_markers.append( (title.text, chapter_times[index], end) )
         
         # Close chapter table
         chapter_table_close = self.driver.find_element(By.CLASS_NAME, 'shibui-shield')
@@ -323,6 +325,15 @@ class Scraper:
 
         expected_time = timeline_length.get_attribute("textContent").replace("-", "")
         print(f"Final book should be ~{expected_time} in length.")
+
+        if chapter_markers:
+            # Modify the last chapter marker to end at the end of the book.
+            title, start, _ = chapter_markers.pop()
+            end = expected_time
+        else:
+            # Book has no chapters, give it a fake one.
+            title, start, end = None, "0:0:0", expected_time
+        chapter_markers.append( (title, start, end) )
 
         expected_duration = convert_metadata.to_seconds(expected_time)
         self.chapter_seconds.append(expected_duration)
@@ -612,5 +623,5 @@ class Scraper:
         if overdrive_download.download_cover(cover_image_url, cover_path, self.get_cookies(), self.config.get("abort_on_warning", False)):
             print("Downloaded cover")
 
-        return (chapter_markers, expected_time)
+        return chapter_markers
 

@@ -372,19 +372,16 @@ def to_hms(seconds: int) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python transform_json.py <ifilename> <total_duration>")
+    if len(sys.argv) != 2:
+        print("Usage: python transform_json.py <ifilename>")
         sys.exit(1)
 
     filename = sys.argv[1]
-    total_duration = sys.argv[2]
-    convert_file(filename, total_duration)
+    convert_file(filename)
 
-def convert_file(filename: str, total_duration: str):
+def convert_file(filename: str):
     dir, _ = os.path.split(filename)
     ofilename = os.path.join(dir, 'metadata.json')
-
-    total_seconds = to_seconds(total_duration)
 
     with open(filename, 'r') as file:
         data = json.load(file)
@@ -396,15 +393,12 @@ def convert_file(filename: str, total_duration: str):
     if os.path.exists(chapter_file):
         # Convert to a audiobookfile chapter list.
         with open(chapter_file) as f:
-            raw = json.load(f)
-        # Apparently Overdrive indexes by chapter NAME, switch to a list of chapter starts.
-        chs = sorted((to_seconds(time), title) for title,time in raw.items())
+            chs = json.load(f)
         for i, ch in enumerate(chs):
-            if chapters:
-                chapters[-1]['end'] = ch[0]
-            chapters.append({'id': i, 'title': ch[1], 'start': ch[0]})
-        if chapters:
-            chapters[-1]['end'] = total_seconds
+            title, start, end = ch
+            if not title:
+                title = ''
+            chapters.append({'id': i, 'title': title, 'start': start, 'end': end})
 
     output_data = abs_from_pylibby(input_data, ["Autoloaded", "OdmpyNG"])
     if chapters:
