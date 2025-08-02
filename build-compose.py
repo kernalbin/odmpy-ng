@@ -14,8 +14,8 @@ def build_docker(download_base: Path, tmp_base: Path) -> dict[str, str]:
     env = os.environ.copy()
     env["HOST_UID"] = str(UID)
     env["HOST_GID"] = str(GID)
-    env["AUDIOBOOK_FOLDER"] = str(download_base)
-    env["AUDIOBOOK_TMP"] = str(tmp_base)
+    env["AUDIOBOOK_FOLDER"] = str(download_base.absolute())
+    env["AUDIOBOOK_TMP"] = str(tmp_base.absolute())
     env["COMPOSE_BAKE"] = "true"
     base_image = "selenium/standalone-chrome"
 
@@ -65,8 +65,6 @@ def build_docker(download_base: Path, tmp_base: Path) -> dict[str, str]:
 def main():
     default_dest = os.getenv('AUDIOBOOK_FOLDER', None)
     default_tmp = os.getenv('AUDIOBOOK_TMP', None)
-    if not default_tmp and default_dest:
-        default_tmp = Path(default_dest) / 'tmp'
 
     # options
     args = argparse.ArgumentParser()
@@ -82,8 +80,10 @@ def main():
         default=default_tmp,
         help=f'Directory under which temporary files will be stored (default: AUDIOBOOK_TMP environment variable or dest/tmp)'
     )
-    # Use argument 'run' to call the docker with the rest of the arguments.
-    args.add_argument('run', nargs=argparse.REMAINDER)
+    args.add_argument(
+        'run',
+        nargs=argparse.REMAINDER,
+        help="Use argument 'run' to call the docker with the rest of the arguments.")
 
     # parse
     opts = args.parse_args()
@@ -91,11 +91,11 @@ def main():
     if not opts.dest:
         print("Error: no destination directory specified, use -d or AUDIOBOOK_FOLDER environment variable")
         sys.exit(1)
-    if not opts.tmp:
-        print("Error: no temporary directory specified, use -t or AUDIOBOOK_TMP environment variable")
-        sys.exit(1)
 
-    env = build_docker(Path(opts.dest), Path(opts.tmp))
+    dest = Path(opts.dest)
+    tmp = dest / 'tmp' if not opts.tmp else Path(opts.tmp)
+
+    env = build_docker(dest, tmp)
 
     if opts.run:
         res = subprocess.call("docker compose run -it --rm odmpy-ng " + ' '.join(opts.run[1:]), shell=True, env=env)
