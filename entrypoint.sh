@@ -23,11 +23,21 @@ else
     username="$existing_user"
 fi
 
-# Fix permissions (optional, e.g., for /downloads)
-mkdir -p /downloads
-chown $HOST_UID:$HOST_GID /downloads
-chown -R $HOST_UID:$HOST_GID /app
+echo "Run commands as in-container user $username (UID: $HOST_UID, GID: $HOST_GID)"
 
-# Drop privileges
-exec gosu "$username" python3 interactive.py /config/config.json
+# Fix permissions
+mkdir -p /downloads
+mkdir -p /tmp-downloads
+chown $HOST_UID:$HOST_GID /downloads /tmp-downloads
+
+echo "Process arguments for $0 $@"
+if [[ $1 == "--idle" ]]; then
+    while true; do
+        sleep 60
+        printf "."
+    done
+else
+    # Drop privileges (-u to unbuffer, line by line is better for us)
+    exec gosu "$username" python3 -u interactive.py /config/config.json "$@"
+fi
 

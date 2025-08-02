@@ -1,0 +1,21 @@
+services:
+  odmpy-ng:
+    image: odmpy-ng:dev
+    build:
+      context: .
+      args:
+        SELENIUM_SHA: ${SELENIUM_SHA}
+    environment:
+      HOST_UID: ${HOST_UID}
+      HOST_GID: ${HOST_GID}
+      AUDIOBOOK_FOLDER: ${AUDIOBOOK_FOLDER}
+      AUDIOBOOK_TMP: ${AUDIOBOOK_TMP}
+    volumes:
+      - ./config:/config
+      - ${AUDIOBOOK_FOLDER}:/downloads
+      - ${AUDIOBOOK_TMP}:/tmp-downloads
+      - ./:/app:ro
+    entrypoint: ["/entrypoint.sh"]
+    command: []
+    restart: no
+

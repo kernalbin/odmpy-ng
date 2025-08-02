@@ -19,7 +19,7 @@ def time_as_int(timestamp: str) -> int:
     else:
         raise ValueError("Timestamp must be in 'MM:SS' or 'HH:MM:SS' format")
 
-def write_metafile(tmp_dir, chaptertimes: dict, title: str, author: str, length: int):
+def write_metafile(tmp_dir, chaptertimes: dict, title: str, author: str, length: str):
     """
     Generates an ffmpeg metadata file with chapter information.
     
@@ -29,7 +29,7 @@ def write_metafile(tmp_dir, chaptertimes: dict, title: str, author: str, length:
                               Example: {'Intro': '00:00', 'Chapter 1': '00:13'}
         title (str): The book or album title.
         author (str): The book or album author.
-        length (int): Total duration of the audio in milliseconds (used to close the last chapter).
+        length (str): Total duration of the audio as H:M:S.
     """
     filename = os.path.join(tmp_dir, "ffmetadata")
     punctuation_remover = str.maketrans(dict.fromkeys(string.punctuation))

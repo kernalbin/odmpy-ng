@@ -1,5 +1,9 @@
 # Use selenium's standalone chrome image (includes Chrome+WebDriver)
-FROM selenium/standalone-chrome:latest
+# Optionally, pass in a SHA tag in the form "@sha256:123456..." to use
+# a specific version, needed because Selenium's images are updated
+# frequently and even dated tags aren't stable.
+ARG SELENIUM_SHA=""
+FROM selenium/standalone-chrome${SELENIUM_SHA}
 
 # Switch to root to install dependencies
 USER root
@@ -18,8 +22,7 @@ RUN apt-get update && \
     pip3 install --upgrade pip && \
     pip3 install --no-cache-dir -r requirements.txt
 
-# Copy python scripts and entrypoint
-COPY *.py ./
+# Copy entrypoint
 COPY entrypoint.sh /entrypoint.sh
 
 # Make entrypoint executable
@@ -28,5 +31,9 @@ RUN chmod +x /entrypoint.sh
 # Supress pkg_resources deprecation warning until upstream resolves
 ENV PYTHONWARNINGS="ignore:pkg_resources is deprecated as an API"
 
-# default command to run the app
-CMD ["/entrypoint.sh"]
+# command to run the app (will accept arguments)
+ENTRYPOINT ["/entrypoint.sh"]
+# Default is interactive menus.
+# Alternately, --idle will run the permissions fixing, then just wait for docker exec to run the app.
+CMD []
+

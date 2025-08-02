@@ -4,7 +4,8 @@
             "name": "Example Library",
             "url": "https://yourlibrary.overdrive.com",
             "card_number": "YOUR_CARD_NUMBER",
-            "pin": "YOUR_PIN"
+            "pin": "YOUR_PIN",
+            "site-id": 103
         }
     ],
     "low_quality_encode": 0,

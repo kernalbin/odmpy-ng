@@ -11,15 +11,18 @@
 - Converts MP3s into .m4b files with embedded chapter metadata
 - Generates metadata.json compatible with Audiobookshelf
 - Customizable and automated scraping via Selenium
+- Fully command-line compatible (one book per call)
 
 ---
 
-## Installation
+## Running
 
+Before running, you must configure the tool with a configuration file, see
+Configuration section below.
 
 ### Option 1: Run with Docker
 
-This is the preferred usage method.
+This (or docker compose) is the preferred usage method.
 
 Requirements:
 - Docker
@@ -32,6 +35,8 @@ docker build -t odmpy-ng .
 docker run -it --rm \
   -v ./config:/config \
   -v ./downloads:/downloads \
+  -v ./tmp-downloads:/tmp-downloads \
+  -v .:/app:ro \
   -e HOST_UID=$(id -u) \
   -e HOST_GID=$(id -g) \
   odmpy-ng
@@ -39,7 +44,32 @@ docker run -it --rm \
 
 ---
 
-### Option 2: Run Locally
+### Option 2: Run with Docker Compose
+
+This can make development easier, since it builds quicker and only needs to be
+told the path to the books ouptut directory (and that can be provided by an
+environment variable, AUDIOBOOK_FOLDER).
+
+Use `./build-compose.py` to build the docker-compose file.
+
+See `build-compose.py run --help` for odmpy-ng options.
+
+Requirements:
+- Docker Compose (note that the older docker-compose is not supported)
+- Git
+- Python 3.9+ on your host computer
+
+```bash
+git clone https://github.com/kernalbin/odmpy-ng.git
+cd odmpy-ng
+cp config/config.example.json config/config.json
+# edit config/config.json
+./build-compose.py -d ~/audiobooks -t ~/mytmp run
+```
+
+---
+
+### Option 3: Run Locally
 
 Requirements:
 - Python 3.9+
@@ -81,6 +111,63 @@ Example `config.json`:
 }
 ```
 
+Optionally, each library may have a "site-id" key with an integer value, which
+may be passed to the -s option to skip past the library selection screen. Any
+site-id values provided must be unique within your configuration file.
+
+---
+
+## Command Line Options
+
+A quick look at the command line options:
+
+```bash
+$ ./build-compose.py -d ~/audiobooks run --help
+Using image: selenium/standalone-chrome@sha256:27edde51c30256aa3dfab3c95141ce74fd971c58763f4f8c70ff7521faae3d2b.
+@sha256:27edde51c30256aa3dfab3c95141ce74fd971c58763f4f8c70ff7521faae3d2b
+Run commands as in-container user ubuntu (UID: 1000, GID: 1000)
+Process arguments for /entrypoint.sh --help
+Starting ODMPY-NG
+usage: interactive.py [-h] [--id ID] [--retry] [--name-dir NAME_DIR] [--library LIBRARY | --site-id SITE_ID] config_file
+
+positional arguments:
+  config_file           Path to config file
+
+options:
+  -h, --help            show this help message and exit
+  --id ID, -i ID        Libby ID for a single book to download
+  --retry, -r           Allow retry of stopped downloads (if left in tmp dir)
+  --name-dir NAME_DIR, -n NAME_DIR
+                        Fixed subdirectory relative to /downloads to move single downloaded book to
+  --library LIBRARY, -L LIBRARY
+                        Index of library within config to download from
+  --site-id SITE_ID, -s SITE_ID
+                        Site-Id assigned in config to library to download from
+```
+
+This demo shows a run of the builder, which has three options you need to know
+about: `-d`/`--download-base`, `-t`/`--tmp-dir`, and `run`. The first is the
+location of the output directory for the downloaded files, the second allows a
+different folder to be used for in-progress downloads, and the third allows
+you, after building, to actually run the audiobook downloader. Any options
+following `run` will be passed to the downloader (note: they're all optional!).
+For freqent use, `-d` can be omitted if AUDIOBOOK_FOLDER is set in your
+environment, and `-t` can be specified with AUDIOBOOK_TMP or allowed to default
+to the `tmp` subfolder of your download folder, leaving a very simple `run`
+command.
+
+Once you've used the downloader a few times and checked that it puts files in
+the right places, you might want to check out the options. You can see the help
+for them above, but here's a table with some brief descriptions:
+
+| Option                | Description |
+|-----------------------|-------------|
+| `-i`, `--id`              | Libby ID for a single book to download. You can see this from your library's webpage for the book. |
+| `-r`, `--retry`           | Allow retry of stopped downloads (if left in tmp dir). You can enable this after a download fails, the cleanup happens before the run, not after. |
+| `-L`, `--library`         | If you have multiple libraries in your config, you can specify which one to download from, counted from 0. |
+| `-s`, `--site-id`         | Same as above, but if your library entries have a site-id you can use that for this option. |
+| `-n`, `--name-dir`        | This can only be used when you select one single book, either by --id or manually; it will place the downloaded book into the indicated subfolder of your -d downloads directory. If this option isn't provided, the author and title will be used to build the book's folder name (be cautious, many series have the same name for every book). |
+
 ---
 
 ## Project Structure
@@ -100,7 +187,6 @@ Example `config.json`:
 ## Roadmap
 
 - [ ] Minimize bot-like behavior to reduce detection risk  
-- [x] Fully command-line compatible (partial support)  
 - [ ] Batch download multiple books  
 - [ ] Filter loans by media type
 - [ ] Support for branch libraries
