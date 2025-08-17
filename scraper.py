@@ -70,13 +70,43 @@ class Scraper:
         if banners: banners[0].click()
 
         # Enter credentials
-        signin_button = self.driver.find_element(By.CLASS_NAME, 'signin-button')
-        username_input = self.driver.find_element(By.ID, 'username')
-        password_input = self.driver.find_element(By.ID, 'password')
+        sublibrary_inputs = self.driver.find_elements(By.ID, 'signin-options')
+        sublibrary_input = sublibrary_inputs[0] if len(sublibrary_inputs) == 1 else None
 
         wait = WebDriverWait(self.driver, timeout=15)
+
+        # Logins with sublibrary sometimes require choosing it first.
+        if sublibrary_input and sublibrary_input.is_displayed() and sublibrary_input.is_enabled():
+            if not self.config['sublibrary']:
+                print(f"ERROR: Sublibrary required for library {self.config['library']} but not specified")
+                sys.exit(2)
+            sublibrary_input.click()
+            time.sleep(0.25)
+            sublibrary_output = self.driver.find_element(By.CLASS_NAME, 'ui-autocomplete')
+            print(f"Starting with {len(sublibrary_output.find_elements(By.TAG_NAME, 'li'))} sublibrary options.")
+            # Type one key at a time until selection list reduces to a single option
+            for char in self.config['sublibrary']:
+                sublibrary_input.send_keys(char)
+                time.sleep(0.25)
+                subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
+                print(f"   after typing '{char}': {len(subs)} options.")
+                # If only one ul item left, select it
+                if len(subs) == 1:
+                    sublibrary_output = self.driver.find_element(By.CLASS_NAME, 'ui-autocomplete')
+                    subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
+                    subs[0].click()
+                    time.sleep(0.25)
+                    break
+                elif not subs:
+                    print(f"ERROR: Sublibrary {self.config['sublibrary']} not found in library {self.config['library']}")
+                    sys.exit(2)
+
+        signin_button = self.driver.find_element(By.CLASS_NAME, 'signin-button')
+
         wait.until(lambda _ : signin_button.is_enabled())
 
+        username_input = self.driver.find_element(By.ID, 'username')
+        password_input = self.driver.find_element(By.ID, 'password')
         username_input.send_keys(self.config['user'])
         password_input.send_keys(self.config['pass'])
 
@@ -105,7 +135,9 @@ class Scraper:
             self.driver.get(self.base_url)
             try:
                 for cookie in cookies:
-                    self.driver.add_cookie(cookie)
+                    # Check for site cookie domain, case insensitive (we keep all cookies in same file)
+                    if self.config['library'].lower() in cookie['domain'].lower():
+                        self.driver.add_cookie(cookie)
             except:
                 print("Invalid cookies")
                 return self._login()
