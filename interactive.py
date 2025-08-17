@@ -103,7 +103,7 @@ def main():
     tmp_base = pathlib.Path("/tmp-downloads")
     tmp_base.mkdir(parents=True, exist_ok=True)
 
-    cookies = []
+    cookies = {}
     cookie_file = os.path.join(config_dir, "cookies")
     if os.path.exists(cookie_file):
         try:
@@ -111,6 +111,9 @@ def main():
                 cookies = json.load(f)
         except Exception as e:
             print(f"Error loading cookies: {e}")
+    # Old cookie file used a list; new is a dict of lists
+    if isinstance(cookies, list):
+        cookies = {}
 
     print("Config loaded")
 
@@ -177,17 +180,22 @@ def main():
         "allow-retry": args.retry,
         "id": args.id,
     }
+    if "sublibrary" in selected_library:
+        scraper_config["sublibrary"] = selected_library["sublibrary"]
+
     os.makedirs(downloads_dir, mode=0o755, exist_ok=True)
         
     print(f"Using library: {selected_library['name']}")
 
     scraper = Scraper(scraper_config)
-    cookies = scraper.ensure_login(cookies)
+    new_cookies = scraper.ensure_login(cookies.get(selected_library["name"], []))
 
-    if not cookies:
+    if not new_cookies:
         print("Sign in failed")
         sys.exit(1)
 
+    # Update all of this library's cookies.
+    cookies[selected_library["name"]] = new_cookies
     with open(cookie_file, "w") as f:
         json.dump(cookies, f, indent=4)
 
@@ -233,16 +241,15 @@ def main():
         print(f"Accessing {book_selection['title']}, ID: {book_selection['id']}")
 
         # Use scraper.py to download book
-        book_data = scraper.get_book(book_selection["link"], tmp_dir)
+        book_chapter_markers = scraper.get_book(book_selection["link"], tmp_dir)
 
-        if not book_data:
+        if not book_chapter_markers:
             print("Failed to download")
             continue
 
         # Reformat returned tuple for easier readability
         book_title = book_selection["title"]
         book_author = book_selection["author"]
-        book_chapter_markers, book_expected_length = book_data
 
         # Save current cookies for upcoming downloads
         cookies = scraper.get_cookies()
@@ -269,7 +276,7 @@ def main():
             if overdrive_download.download_thunder_metadata(book_selection["id"], metadata_path):
                 print("Downloaded json metadata")
                 if config.get("convert_audiobookshelf_metadata", 0):
-                    convert_metadata.convert_file(metadata_path, book_expected_length)
+                    convert_metadata.convert_file(metadata_path)
                     print("Provided audiobookshelf metadata")
                     if not config.get("download_thunder_metadata", 0):
                         os.unlink(metadata_path)
@@ -289,7 +296,7 @@ def main():
                 print("Converted to single M4B")
 
             print("Generating metadata")
-            ffmetadata.write_metafile(tmp_dir, book_chapter_markers, book_title, book_author, book_expected_length)
+            ffmetadata.write_metafile(tmp_dir, book_chapter_markers, book_title, book_author)
 
             print("Adding metadata to audiobook")
             cover_path = os.path.abspath(os.path.join(tmp_dir, "cover.jpg"))

@@ -2,10 +2,11 @@
     "libraries": [
         {
             "name": "Example Library",
-            "url": "https://yourlibrary.overdrive.com",
+            "url": "https://yourlibrary-sublibrary.overdrive.com",
             "card_number": "YOUR_CARD_NUMBER",
             "pin": "YOUR_PIN",
-            "site-id": 103
+            "site-id": 103,
+            "sublibrary": "Your Sublibrary"
         }
     ],
     "low_quality_encode": 0,

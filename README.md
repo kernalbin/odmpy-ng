@@ -99,7 +99,8 @@ Example `config.json`:
             "name": "Example Library",
             "url": "https://yourlibrary.overdrive.com",
             "card_number": "YOUR_CARD_NUMBER",
-            "pin": "YOUR_PIN"
+            "pin": "YOUR_PIN",
+            "sublibrary": "Your Sublibrary"
         }
     ],
     "low_quality_encode": 0,
@@ -111,9 +112,16 @@ Example `config.json`:
 }
 ```
 
+Optionally, the "sublibrary" key will speed things up if your library's site is
+a cooperative; if you don't provide this, odmpy-ng will prompt you for it,
+listing all of the choices. Just enter the name of the sublibrary you
+recognize. If your library doesn't have a sublibrary, you can leave this key
+out, it'll be ignored.
+
 Optionally, each library may have a "site-id" key with an integer value, which
 may be passed to the -s option to skip past the library selection screen. Any
-site-id values provided must be unique within your configuration file.
+site-id values provided must be unique within your configuration file. See the
+provided `config.example.json` file for an example.
 
 ---
 

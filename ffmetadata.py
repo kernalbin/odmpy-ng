@@ -19,21 +19,18 @@ def time_as_int(timestamp: str) -> int:
     else:
         raise ValueError("Timestamp must be in 'MM:SS' or 'HH:MM:SS' format")
 
-def write_metafile(tmp_dir, chaptertimes: dict, title: str, author: str, length: str):
+def write_metafile(tmp_dir, chaptertimes: list, title: str, author: str):
     """
     Generates an ffmpeg metadata file with chapter information.
     
     Args:
         tmp_dir (str): Directory where ffmetadata will be saved.
-        chapter_times (dict): Dictionary mapping chapter titles to time strings.
-                              Example: {'Intro': '00:00', 'Chapter 1': '00:13'}
+        chapter_times (list): list of ("chapter title", "h:m:s start", "h:m:s end").
         title (str): The book or album title.
         author (str): The book or album author.
-        length (str): Total duration of the audio as H:M:S.
     """
     filename = os.path.join(tmp_dir, "ffmetadata")
     punctuation_remover = str.maketrans(dict.fromkeys(string.punctuation))
-    chapter_titles = list(chaptertimes.keys())
 
     with open(filename, 'w') as f:
         # Metadata header
@@ -44,19 +41,14 @@ def write_metafile(tmp_dir, chaptertimes: dict, title: str, author: str, length:
         f.write(f"album_artist={author}\n")
 
         # Write chapter data
-        for i, chapter_title in enumerate(chapter_titles):
+        for chaptertime in chaptertimes:
+            chapter_title, chapter_start, chapter_end = chaptertime
             f.write("[CHAPTER]\n")
             f.write("TIMEBASE=1/1000\n")
-            f.write(f"START={time_as_int(chaptertimes[chapter_title])}\n")
-
-            # Determine end time of chapter
-            if i+1 < len(chapter_titles):
-                f.write(f"END={time_as_int(chaptertimes[chapter_titles[i+1]])}\n")
-            else:
-                # Use book length for last chapter
-                # minus 1ms to prevent overlap
-                f.write(f"END={time_as_int(length)-1}\n")
+            f.write(f"START={time_as_int(chapter_start)}\n")
+            f.write(f"END={time_as_int(chapter_end)}\n")
 
             # Remove punctuation from chapter title
-            clean_title = chapter_title.translate(punctuation_remover)
+            clean_title = chapter_title.translate(punctuation_remover) if chapter_title else ''
             f.write(f"title={clean_title}\n")
+
