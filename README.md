@@ -112,11 +112,11 @@ Example `config.json`:
 }
 ```
 
-The "sublibrary" key will be needed if your library's site is a cooperative;
-you can find what to enter here by logging into your OverDrive site, libraries
-that need this will first ask you to select a sublibrary from a dropdown list.
-Just enter the name of the sublibrary you click on here. If your library doesn't
-have a sublibrary, you can leave this key out, it'll be ignored.
+Optionally, the "sublibrary" key will speed things up if your library's site is
+a cooperative; if you don't provide this, odmpy-ng will prompt you for it,
+listing all of the choices. Just enter the name of the sublibrary you
+recognize. If your library doesn't have a sublibrary, you can leave this key
+out, it'll be ignored.
 
 Optionally, each library may have a "site-id" key with an integer value, which
 may be passed to the -s option to skip past the library selection screen. Any

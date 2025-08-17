@@ -77,29 +77,35 @@ class Scraper:
 
         # Logins with sublibrary sometimes require choosing it first.
         if sublibrary_input and sublibrary_input.is_displayed() and sublibrary_input.is_enabled():
-            if not self.config['sublibrary']:
-                print(f"ERROR: Sublibrary required for library {self.config['library']} but not specified")
-                sys.exit(2)
+            interactive = not self.config.get('sublibrary')
             sublibrary_input.click()
             time.sleep(0.25)
             sublibrary_output = self.driver.find_element(By.CLASS_NAME, 'ui-autocomplete')
             print(f"Starting with {len(sublibrary_output.find_elements(By.TAG_NAME, 'li'))} sublibrary options.")
-            # Type one key at a time until selection list reduces to a single option
-            for char in self.config['sublibrary']:
-                sublibrary_input.send_keys(char)
-                time.sleep(0.25)
+            if interactive:
                 subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
-                print(f"   after typing '{char}': {len(subs)} options.")
-                # If only one ul item left, select it
-                if len(subs) == 1:
-                    sublibrary_output = self.driver.find_element(By.CLASS_NAME, 'ui-autocomplete')
+                # Display numbered list of sublibraries and prompt for selection
+                for index,sub in enumerate(subs):
+                    print(f"   {index}: {sub.text}")
+                sub_index = int(input("Select sublibrary: "))
+                subs[sub_index].click()
+            else:
+                # Type one key at a time until selection list reduces to a single option
+                for char in self.config['sublibrary']:
+                    sublibrary_input.send_keys(char)
+                    time.sleep(0.1)
                     subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
-                    subs[0].click()
-                    time.sleep(0.25)
-                    break
-                elif not subs:
-                    print(f"ERROR: Sublibrary {self.config['sublibrary']} not found in library {self.config['library']}")
-                    sys.exit(2)
+                    print(f"   after typing '{char}': {len(subs)} options.")
+                    # If only one ul item left, select it
+                    if len(subs) == 1:
+                        sublibrary_output = self.driver.find_element(By.CLASS_NAME, 'ui-autocomplete')
+                        subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
+                        subs[0].click()
+                        time.sleep(0.25)
+                        break
+                    elif not subs:
+                        print(f"ERROR: Sublibrary {self.config['sublibrary']} not found in library {self.config['library']}")
+                        sys.exit(2)
 
         signin_button = self.driver.find_element(By.CLASS_NAME, 'signin-button')
 
