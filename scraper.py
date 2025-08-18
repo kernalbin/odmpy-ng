@@ -16,6 +16,31 @@ import os
 import time
 import sys
 
+def normalize_sublibrary_name(library: str) -> str:
+    "Make a token like the api's subsite name from the user-friendly name"
+    return "".join(library.split()).lower()
+
+# return the length of the longest prefix of s1 that is found anywhere in s2
+def matching_length(s1: str, s2: str) -> int:
+    """
+        matching_length:
+            Returns the length of the longest prefix of s1 that is found anywhere in s2
+    """
+    return max(len(s1[:i]) for i in range(len(s1) + 1) if s1[:i] in normalize_sublibrary_name(s2))
+
+# Find which single item in a list matches as much of the target string as possible
+def find_biggest_match_index(target: str, candidates: list[str]) -> int|None:
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return 0
+    rankings = sorted(((matching_length(target, candidate), idx, candidate) for idx, candidate in enumerate(candidates)), reverse=True)
+    if rankings[0][0] == rankings[1][0]:
+        print(f"WARNING: Found more than 1 equally good candidates for '{target}': {rankings[:2]}")
+        return None
+    print(f"Found best candidate for '{target}': {rankings[0][2]} at index {rankings[0][1]}")
+    return rankings[0][1]
+
 class Scraper:
     """Automated Overdrive audiobook downloader using Selenium."""
     def __init__(self, config, headless=True):
@@ -74,38 +99,29 @@ class Scraper:
         sublibrary_input = sublibrary_inputs[0] if len(sublibrary_inputs) == 1 else None
 
         wait = WebDriverWait(self.driver, timeout=15)
+        self.driver.implicitly_wait(1)
 
         # Logins with sublibrary sometimes require choosing it first.
         if sublibrary_input and sublibrary_input.is_displayed() and sublibrary_input.is_enabled():
             interactive = not self.config.get('sublibrary')
             sublibrary_input.click()
-            time.sleep(0.25)
             sublibrary_output = self.driver.find_element(By.CLASS_NAME, 'ui-autocomplete')
-            print(f"Starting with {len(sublibrary_output.find_elements(By.TAG_NAME, 'li'))} sublibrary options.")
+            time.sleep(0.25)
+            subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
+            # Display numbered list of sublibraries and prompt for selection
+            for index,sub in enumerate(subs):
+                print(f"   {index}: {sub.text}")
             if interactive:
-                subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
-                # Display numbered list of sublibraries and prompt for selection
-                for index,sub in enumerate(subs):
-                    print(f"   {index}: {sub.text}")
                 sub_index = int(input("Select sublibrary: "))
                 subs[sub_index].click()
             else:
-                # Type one key at a time until selection list reduces to a single option
-                for char in self.config['sublibrary']:
-                    sublibrary_input.send_keys(char)
-                    time.sleep(0.1)
-                    subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
-                    print(f"   after typing '{char}': {len(subs)} options.")
-                    # If only one ul item left, select it
-                    if len(subs) == 1:
-                        sublibrary_output = self.driver.find_element(By.CLASS_NAME, 'ui-autocomplete')
-                        subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
-                        subs[0].click()
-                        time.sleep(0.25)
-                        break
-                    elif not subs:
-                        print(f"ERROR: Sublibrary {self.config['sublibrary']} not found in library {self.config['library']}")
-                        sys.exit(2)
+                idx = find_biggest_match_index(self.config['sublibrary'], [sub.text for sub in subs])
+                if idx is None:
+                    print(f"ERROR: Sublibrary {self.config['sublibrary']} not found in library {self.config['library']}")
+                    sys.exit(2)
+                else:
+                    subs[idx].click()
+                    time.sleep(0.25)
 
         signin_button = self.driver.find_element(By.CLASS_NAME, 'signin-button')
 
