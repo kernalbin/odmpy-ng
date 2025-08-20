@@ -109,13 +109,18 @@ class Scraper:
             time.sleep(0.25)
             subs = sublibrary_output.find_elements(By.TAG_NAME, 'li')
             # Display numbered list of sublibraries and prompt for selection
+            idx = None if interactive else find_biggest_match_index(self.config['sublibrary'], [sub.text for sub in subs])
             for index,sub in enumerate(subs):
-                print(f"   {index}: {sub.text}")
+                selector = ""
+                if idx is None:
+                    selector = f'{index:>2}'
+                elif index == idx:
+                    selector = '->'
+                print(f" {selector:>2}: {sub.text}")
             if interactive:
                 sub_index = int(input("Select sublibrary: "))
                 subs[sub_index].click()
             else:
-                idx = find_biggest_match_index(self.config['sublibrary'], [sub.text for sub in subs])
                 if idx is None:
                     print(f"ERROR: Sublibrary {self.config['sublibrary']} not found in library {self.config['library']}")
                     sys.exit(2)
