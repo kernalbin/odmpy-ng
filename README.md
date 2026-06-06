@@ -1,10 +1,16 @@
-# odmpy-ng
+# Archived here
+### Head to https://github.com/wtanksleyjr/odmpy-ng/ for continued development
+### Thank you all, happy listening
+
+<br>
+
+## odmpy-ng
 **OverDrive Manager Next Generation** — a tool for downloading and organizing audiobooks from OverDrive.
 ⚠️ **Use at your own risk. Requires a valid library account.**
 
 ---
 
-## Features
+### Features
 
 - Interactive or Docker-based audiobook downloader for OverDrive
 - Scrapes audio URLs, chapters, and cover images
@@ -15,12 +21,12 @@
 
 ---
 
-## Running
+### Running
 
 Before running, you must configure the tool with a configuration file, see
 Configuration section below.
 
-### Option 1: Run with Docker
+#### Option 1: Run with Docker
 
 This (or docker compose) is the preferred usage method.
 
@@ -44,7 +50,7 @@ docker run -it --rm \
 
 ---
 
-### Option 2: Run with Docker Compose
+#### Option 2: Run with Docker Compose
 
 This can make development easier, since it builds quicker and only needs to be
 told the path to the books ouptut directory (and that can be provided by an
@@ -69,7 +75,7 @@ cp config/config.example.json config/config.json
 
 ---
 
-### Option 3: Run Locally
+#### Option 3: Run Locally
 
 Requirements:
 - Python 3.9+
@@ -87,7 +93,7 @@ python interactive.py [config_file_path]
 
 ---
 
-## Configuration
+### Configuration
 
 You'll need to create a configuration file with your library's OverDrive URL and login credentials.  
 Example `config.json`:
@@ -117,7 +123,7 @@ site-id values provided must be unique within your configuration file.
 
 ---
 
-## Command Line Options
+### Command Line Options
 
 A quick look at the command line options:
 
@@ -170,7 +176,7 @@ for them above, but here's a table with some brief descriptions:
 
 ---
 
-## Project Structure
+### Project Structure
 
 | File / Script             | Description |
 |--------------------------|-------------|
@@ -184,7 +190,7 @@ for them above, but here's a table with some brief descriptions:
 
 ---
 
-## Roadmap
+### Roadmap
 
 - [ ] Minimize bot-like behavior to reduce detection risk  
 - [ ] Batch download multiple books  
@@ -193,7 +199,7 @@ for them above, but here's a table with some brief descriptions:
 
 ---
 
-## ⚠️ Disclaimer
+### ⚠️ Disclaimer
 
 This tool is intended for personal use only.  
 You must have a valid library account with OverDrive access.
